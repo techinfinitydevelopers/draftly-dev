@@ -22,7 +22,8 @@ function toSlug(str: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
+    .slice(0, 40)
+    .replace(/-+$/, ''); // trim trailing dash after slice
 }
 
 /** Check if a subdomain is already taken in Firestore */

@@ -2535,7 +2535,7 @@ npm run dev
       },
       { id: 'video', label: videoChain.length > 1 ? `Videos (${videoChain.length})` : 'Video', visible: !!videoBase64 || videoChain.length > 0 },
       { id: 'frames', label: `Frames${webpFrames.length ? ` (${webpFrames.length})` : ''}`, visible: webpFrames.length > 0 },
-      { id: 'code', label: 'Code', visible: !!siteCode },
+      { id: 'code', label: 'Code', visible: false },
     ];
 
   // Credit calculations for display (synced with subscription-plans.ts)
@@ -3942,20 +3942,6 @@ npm run dev
                     </button>
 
 
-                    <button
-                      type="button"
-                      onClick={() => setRightTab('code')}
-                      disabled={!codeStructure}
-                      className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-left transition-all hover:border-blue-400/30 hover:bg-blue-500/[0.06] disabled:opacity-40"
-                    >
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-black/30 text-blue-200">
-                        <i className="fa-solid fa-code text-sm" aria-hidden />
-                      </div>
-                      <h3 className="mt-5 text-lg font-semibold text-white">Browse code</h3>
-                      <p className="mt-1.5 text-[13px] text-white/45 leading-relaxed">
-                        index.html, styles, scripts, and frame assets in one place.
-                      </p>
-                    </button>
 
                     <button
                       type="button"
@@ -4369,69 +4355,6 @@ npm run dev
               </div>
             )}
 
-            {/* Code tab — folder structure (Vercel/Cursor-style) */}
-            {rightTab === 'code' && siteCode && codeStructure && (
-              <div className="flex flex-1 min-h-0">
-                <div className="w-[220px] flex-shrink-0 border-r border-white/[0.06] bg-[#08080e] flex flex-col overflow-hidden">
-                  <p className="text-[10px] text-white/40 px-3 py-2.5 uppercase tracking-widest font-bold border-b border-white/[0.06]">Project</p>
-                  <nav className="p-2 overflow-auto flex-1">
-                    {[
-                      { id: 'index.html', label: 'index.html', icon: 'html' },
-                      { id: 'assets/css/main.css', label: 'assets/css/main.css', icon: 'css' },
-                      { id: 'assets/js/main.js', label: 'assets/js/main.js', icon: 'js' },
-                      ...(webpFrames.length > 0 ? [{ id: 'frames-webp', label: `frames-webp (${webpFrames.length})`, icon: 'folder' as const }] : []),
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setSelectedCodeFile(item.id)}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-mono flex items-center gap-2 transition-colors ${selectedCodeFile === item.id ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/[0.06] hover:text-white/80'}`}
-                      >
-                        {item.icon === 'folder' ? (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 text-amber-400/90"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>
-                        ) : item.icon === 'css' ? (
-                          <span className="w-4 text-[10px] font-bold text-blue-400 flex-shrink-0">CSS</span>
-                        ) : item.icon === 'js' ? (
-                          <span className="w-4 text-[10px] font-bold text-amber-400 flex-shrink-0">JS</span>
-                        ) : (
-                          <span className="w-4 text-[10px] font-bold text-emerald-400 flex-shrink-0">HTML</span>
-                        )}
-                        <span className="truncate">{item.label}</span>
-                      </button>
-                    ))}
-                  </nav>
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col bg-[#0a0a12] overflow-hidden">
-                  <p className="text-[10px] text-white/40 px-4 py-2 border-b border-white/[0.06] font-mono truncate">{selectedCodeFile}</p>
-                  <div className="flex-1 overflow-auto p-4">
-                    {selectedCodeFile === 'index.html' && (
-                      <pre className="text-[11px] text-white/75 whitespace-pre-wrap break-words font-mono">{codeStructure.indexHtml}</pre>
-                    )}
-                    {selectedCodeFile === 'assets/css/main.css' && (
-                      <pre className="text-[11px] text-white/75 whitespace-pre-wrap break-words font-mono">{codeStructure.cssText || '/* No extracted CSS */'}</pre>
-                    )}
-                    {selectedCodeFile === 'assets/js/main.js' && (
-                      <pre className="text-[11px] text-white/75 whitespace-pre-wrap break-words font-mono">{codeStructure.jsText || '// No extracted JS'}</pre>
-                    )}
-                    {selectedCodeFile === 'frames-webp' && webpFrames.length > 0 && (
-                      <div>
-                        <p className="text-[12px] text-white/60 mb-3">WebP frames extracted from video ({webpFrames.length} files). Used for scroll-driven background.</p>
-                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
-                          {webpFrames.slice(0, 24).map((f, i) => (
-                            <div key={i} className="aspect-video rounded border border-white/10 overflow-hidden">
-                              <img src={f} alt={`Frame ${i + 1}`} className="w-full h-full object-cover" />
-                            </div>
-                          ))}
-                        </div>
-                        {webpFrames.length > 24 && <p className="text-[11px] text-white/40 mt-2">+ {webpFrames.length - 24} more frames</p>}
-                      </div>
-                    )}
-                    {selectedCodeFile === 'frames-webp' && webpFrames.length === 0 && (
-                      <p className="text-[12px] text-white/50">No frames in this build. Use frame-scroll mode to extract frames from video.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Business Center tab */}
             {rightTab === 'business' && (
