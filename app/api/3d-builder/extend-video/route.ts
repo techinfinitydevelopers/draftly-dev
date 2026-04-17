@@ -11,7 +11,7 @@ import { getMaxPromptCharsForPlan } from '@/lib/builder-prompt-limits';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 const CREDIT_MODEL = 'ltx-2-3-extend-fal';
 

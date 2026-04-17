@@ -22,7 +22,7 @@ import { rehostDataImageUrlForVeoIfNeeded } from '@/lib/rehost-data-image-for-ve
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 const isTransientMissingVideoUrl = (message?: string): boolean =>
     typeof message === 'string' &&
