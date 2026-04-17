@@ -163,7 +163,7 @@ const PIPELINE_NODES: NodeDef[] = [
   { id: 'image', num: '02', title: 'Visual Draft', sub: 'Cinematic background creation', mapSteps: ['gen-image', 'confirm-image'] },
   { id: 'video', num: '03', title: 'Motion Pass', sub: 'High-quality motion synthesis', mapSteps: ['gen-video', 'confirm-video'] },
   { id: 'prepare', num: '04', title: 'Website Build', sub: 'Extract frames → Build website', mapSteps: ['preparing', 'gen-site'] },
-  { id: 'done', num: '05', title: 'Website Ready', sub: 'Download ZIP', mapSteps: ['ready'] },
+  { id: 'done', num: '05', title: 'Website Ready', sub: 'Publish to Draftly', mapSteps: ['ready'] },
 ];
 
 const STEP_ORDER: PipelineStep[] = [
@@ -576,6 +576,12 @@ function ThreeDBuilderInner() {
   const [animPromptInput, setAnimPromptInput] = useState('');
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+
+  // Custom domain state
+  const [domainInput, setDomainInput] = useState('');
+  const [domainStep, setDomainStep] = useState<'idle' | 'instructions' | 'verifying' | 'done' | 'error'>('idle');
+  const [domainError, setDomainError] = useState<string | null>(null);
+  const [connectedDomain, setConnectedDomain] = useState<string | null>(null);
 
   const [videoQuality, setVideoQuality] = useState<BuilderVideoQuality>('720p');
 
@@ -2428,6 +2434,32 @@ npm run dev
     }
   }, [user, activeProjectId, push]);
 
+  // ─── Connect Custom Domain ──
+  const connectDomain = useCallback(async () => {
+    if (!user || !activeProjectId || !domainInput.trim()) return;
+    setDomainStep('verifying');
+    setDomainError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch('/api/hosting/connect-domain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ domain: domainInput.trim(), projectId: activeProjectId }),
+      });
+      const data = await res.json() as { ok?: boolean; domain?: string; url?: string; error?: string; detail?: string };
+      if (!res.ok || !data.ok) {
+        setDomainStep('error');
+        setDomainError(data.detail || data.error || 'DNS verification failed');
+        return;
+      }
+      setConnectedDomain(data.domain || domainInput.trim());
+      setDomainStep('done');
+    } catch (e) {
+      setDomainStep('error');
+      setDomainError(e instanceof Error ? e.message : 'Something went wrong');
+    }
+  }, [user, activeProjectId, domainInput]);
+
   // ─── Placeholder ──
   const placeholder = step === 'idle' ? 'Describe the website you want to build...' :
     step === 'describe' ? 'Describe the background vibe & style...' :
@@ -3878,7 +3910,7 @@ npm run dev
                       Your 3D site is ready to ship
                     </h2>
                     <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-white/55">
-                      Use full-screen preview from here, download ZIP (Premium $200/mo+) from this tab only, or browse code and assets. Iterate anytime from the chat on the left.
+                      Use full-screen preview, publish to a free Draftly subdomain, or connect your custom domain. Iterate anytime from the chat on the left.
                     </p>
                   </motion.div>
 
@@ -3909,25 +3941,6 @@ npm run dev
                       </div>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={downloadZip}
-                      disabled={!siteCode || !canExportZipUser}
-                      className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-left transition-all hover:border-amber-400/25 hover:bg-amber-500/[0.06] disabled:opacity-40"
-                    >
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-black/30 text-amber-200">
-                        <i className="fa-solid fa-file-zipper text-sm" aria-hidden />
-                      </div>
-                      <h3 className="mt-5 text-lg font-semibold text-white">Download ZIP</h3>
-                      <p className="mt-1.5 text-[13px] text-white/45 leading-relaxed">
-                        HTML, CSS, JS, frames, and a README for running locally.
-                      </p>
-                      {!canExportZipUser && (
-                        <p className="mt-3 text-[11px] font-medium text-amber-200/80">
-                          Premium ($200/mo)+ — ZIP, Business OS hosting tools, and integrations
-                        </p>
-                      )}
-                    </button>
 
                     <button
                       type="button"
@@ -3959,7 +3972,7 @@ npm run dev
                       <p className="mt-1.5 text-[13px] text-white/45 leading-relaxed">
                         {publishedUrl
                           ? `Live at: ${publishedUrl}`
-                          : 'Get a free yoursite.draftly.space subdomain instantly.'}
+                          : `Get a free yoursite${process.env.NEXT_PUBLIC_SUBDOMAIN_SUFFIX || '.draftly.space'} subdomain instantly.`}
                       </p>
                       {publishedUrl && (
                         <a
@@ -3973,6 +3986,114 @@ npm run dev
                         </a>
                       )}
                     </button>
+                  </motion.div>
+
+                  {/* ── Custom Domain Card ── */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.12 }}
+                    className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-black/30 text-indigo-300">
+                        <i className="fa-solid fa-globe text-sm" aria-hidden />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-white">Connect Custom Domain</h3>
+                        <p className="text-[12px] text-white/45">Point your domain to Draftly hosting</p>
+                      </div>
+                    </div>
+
+                    {domainStep === 'done' && connectedDomain ? (
+                      <div className="flex items-center gap-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-4 py-3">
+                        <i className="fa-solid fa-circle-check text-emerald-400 text-sm" aria-hidden />
+                        <div>
+                          <p className="text-[13px] font-semibold text-white">{connectedDomain}</p>
+                          <p className="text-[11px] text-emerald-300/80">Domain connected and live</p>
+                        </div>
+                        <a
+                          href={`https://${connectedDomain}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-auto text-[11px] font-bold text-emerald-300/90 hover:text-emerald-200 flex items-center gap-1"
+                        >
+                          Open <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" aria-hidden />
+                        </a>
+                      </div>
+                    ) : domainStep === 'instructions' || domainStep === 'verifying' || domainStep === 'error' ? (
+                      <div className="space-y-4">
+                        {/* DNS instructions */}
+                        <div className="rounded-xl bg-indigo-500/10 border border-indigo-500/20 p-4">
+                          <p className="text-[12px] font-semibold text-white/70 mb-3 uppercase tracking-wider">Add this DNS record at your registrar</p>
+                          <div className="grid grid-cols-3 gap-2 text-[11px]">
+                            <div className="rounded-lg bg-black/40 px-3 py-2">
+                              <p className="text-white/35 font-semibold mb-1">Type</p>
+                              <p className="text-white font-mono">CNAME</p>
+                            </div>
+                            <div className="rounded-lg bg-black/40 px-3 py-2">
+                              <p className="text-white/35 font-semibold mb-1">Name</p>
+                              <p className="text-white font-mono">@</p>
+                            </div>
+                            <div className="rounded-lg bg-black/40 px-3 py-2 col-span-1">
+                              <p className="text-white/35 font-semibold mb-1">Value</p>
+                              <p className="text-white font-mono break-all">customers.prodevelopers.in</p>
+                            </div>
+                          </div>
+                          <p className="mt-3 text-[11px] text-white/35">DNS changes can take up to 48 hours but usually propagate within minutes.</p>
+                        </div>
+
+                        {domainStep === 'error' && domainError && (
+                          <div className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/25 px-4 py-3">
+                            <i className="fa-solid fa-triangle-exclamation text-red-400 text-sm mt-0.5" aria-hidden />
+                            <p className="text-[12px] text-red-200/90">{domainError}</p>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={connectDomain}
+                            disabled={domainStep === 'verifying'}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 px-4 py-2.5 text-[12px] font-bold text-white transition-all"
+                          >
+                            {domainStep === 'verifying' ? (
+                              <><i className="fa-solid fa-spinner fa-spin text-sm" aria-hidden /> Verifying DNS…</>
+                            ) : (
+                              <><i className="fa-solid fa-rotate text-sm" aria-hidden /> Verify DNS</>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setDomainStep('idle'); setDomainError(null); }}
+                            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-[12px] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={domainInput}
+                          onChange={(e) => setDomainInput(e.target.value)}
+                          placeholder="myportfolio.com"
+                          className="flex-1 rounded-xl border border-white/15 bg-black/30 px-4 py-2.5 text-[13px] text-white placeholder-white/25 focus:outline-none focus:border-indigo-400/60 focus:ring-1 focus:ring-indigo-400/30 transition-all"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && domainInput.trim()) setDomainStep('instructions');
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setDomainStep('instructions')}
+                          disabled={!domainInput.trim() || !activeProjectId}
+                          className="rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-5 py-2.5 text-[12px] font-bold text-white transition-all"
+                        >
+                          Connect
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
 
                   <motion.div
@@ -4100,7 +4221,7 @@ npm run dev
                         <div>
                           <h3 className="text-[14px] font-bold text-white">Build complete</h3>
                           <p className="mt-0.5 text-[12px] text-white/55">
-                            Preview, ZIP, and asset shortcuts are on the <span className="text-emerald-200/90 font-semibold">Ship</span> tab.
+                            Preview, publish, and asset shortcuts are on the <span className="text-emerald-200/90 font-semibold">Ship</span> tab.
                           </p>
                         </div>
                       </div>
@@ -4135,7 +4256,7 @@ npm run dev
                         <h4 className="text-[13px] font-bold text-white group-hover:text-blue-300 transition-colors">Agency Pro Tip</h4>
                       </div>
                       <p className="text-[12px] text-white/70 leading-relaxed">
-                        Agencies charge $5k+ for scroll-driven 3D websites. Use the <strong>Front-end only</strong> mode to generate a cinematic hero section, then download the ZIP and integrate it into your client's existing CMS or React app.
+                        Agencies charge $5k+ for scroll-driven 3D websites. Use the <strong>Front-end only</strong> mode to generate a cinematic hero section and publish it instantly to a Draftly subdomain or your custom domain.
                       </p>
                     </div>
                     

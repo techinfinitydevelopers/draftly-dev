@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       subdomain,
-      url: `https://${subdomain}.draftly.space`,
+      url: `https://${subdomain}${process.env.NEXT_PUBLIC_SUBDOMAIN_SUFFIX || '.draftly.space'}`,
     });
   } catch (e) {
     console.error('[hosting/publish]', e);
