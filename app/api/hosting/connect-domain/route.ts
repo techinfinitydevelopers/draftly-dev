@@ -1,36 +1,27 @@
 /**
  * POST /api/hosting/connect-domain
  *
- * Verifies DNS and saves a custom domain mapping to Firestore.
+ * Saves a custom domain mapping to Firestore with status "pending".
+ * DNS is NOT verified here — use GET /api/hosting/verify-domain for that.
+ *
  * Flow:
  *  1. Auth check
  *  2. Validate domain format
- *  3. DNS lookup — CNAME must point to customers.prodevelopers.in
- *  4. On success → write Firestore: domains/{domain} + projects/{projectId}.customDomain
+ *  3. Check domain not already claimed by another user
+ *  4. Write Firestore: domains/{domain} = { uid, projectId, status: 'pending', createdAt }
+ *  5. Return DNS instructions
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import dns from 'node:dns/promises';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CNAME_TARGET = 'customers.prodevelopers.in';
+const VPS_IP = '142.93.218.64';
 
 function isValidDomain(domain: string): boolean {
   return /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(domain.toLowerCase());
-}
-
-async function checkCname(domain: string): Promise<{ ok: boolean; found: string | null }> {
-  try {
-    const addresses = await dns.resolveCname(domain);
-    const found = addresses[0]?.replace(/\.$/, '').toLowerCase() ?? null;
-    const ok = found === CNAME_TARGET.toLowerCase();
-    return { ok, found };
-  } catch {
-    return { ok: false, found: null };
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -77,9 +68,9 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Check domain not already claimed by another user ---
-    const existingDomain = await db.collection('domains').doc(domain).get();
-    if (existingDomain.exists) {
-      const existing = existingDomain.data() as { uid?: string; projectId?: string };
+    const existingDoc = await db.collection('domains').doc(domain).get();
+    if (existingDoc.exists) {
+      const existing = existingDoc.data() as { uid?: string };
       if (existing.uid !== uid) {
         return NextResponse.json(
           { error: 'This domain is already connected to another project.' },
@@ -88,39 +79,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // --- DNS verification ---
-    const { ok, found } = await checkCname(domain);
-    if (!ok) {
-      return NextResponse.json(
-        {
-          error: 'DNS verification failed',
-          detail: found
-            ? `CNAME points to "${found}" instead of "${CNAME_TARGET}"`
-            : `No CNAME record found for "${domain}". Add a CNAME record pointing to "${CNAME_TARGET}" and try again.`,
-          cnameTarget: CNAME_TARGET,
-        },
-        { status: 422 },
-      );
-    }
-
-    // --- Write to Firestore ---
-    const batch = db.batch();
-
-    batch.set(db.collection('domains').doc(domain), {
+    // --- Save to Firestore as pending ---
+    await db.collection('domains').doc(domain).set({
       uid,
       projectId,
-      verifiedAt: new Date(),
+      status: 'pending',
+      createdAt: new Date(),
     });
 
-    batch.set(
-      db.collection('projects').doc(projectId),
-      { customDomain: domain },
-      { merge: true },
-    );
-
-    await batch.commit();
-
-    return NextResponse.json({ ok: true, domain, url: `https://${domain}` });
+    return NextResponse.json({
+      ok: true,
+      domain,
+      dnsInstructions: {
+        type: 'A',
+        name: '@',
+        value: VPS_IP,
+        ttl: 'Auto',
+      },
+    });
   } catch (e) {
     console.error('[hosting/connect-domain]', e);
     const msg = e instanceof Error ? e.message : 'Failed to connect domain';

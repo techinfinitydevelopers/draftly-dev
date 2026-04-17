@@ -579,9 +579,10 @@ function ThreeDBuilderInner() {
 
   // Custom domain state
   const [domainInput, setDomainInput] = useState('');
-  const [domainStep, setDomainStep] = useState<'idle' | 'instructions' | 'verifying' | 'done' | 'error'>('idle');
+  const [domainStep, setDomainStep] = useState<'idle' | 'saving' | 'instructions' | 'verifying' | 'done' | 'error'>('idle');
   const [domainError, setDomainError] = useState<string | null>(null);
   const [connectedDomain, setConnectedDomain] = useState<string | null>(null);
+  const domainPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [videoQuality, setVideoQuality] = useState<BuilderVideoQuality>('720p');
 
@@ -2434,10 +2435,10 @@ npm run dev
     }
   }, [user, activeProjectId, push]);
 
-  // ─── Connect Custom Domain ──
+  // ─── Connect Custom Domain — Step 1: save as pending, show DNS instructions ──
   const connectDomain = useCallback(async () => {
     if (!user || !activeProjectId || !domainInput.trim()) return;
-    setDomainStep('verifying');
+    setDomainStep('saving');
     setDomainError(null);
     try {
       const idToken = await user.getIdToken();
@@ -2446,19 +2447,54 @@ npm run dev
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ domain: domainInput.trim(), projectId: activeProjectId }),
       });
-      const data = await res.json() as { ok?: boolean; domain?: string; url?: string; error?: string; detail?: string };
+      const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
         setDomainStep('error');
-        setDomainError(data.detail || data.error || 'DNS verification failed');
+        setDomainError(data.error || 'Failed to register domain');
         return;
       }
-      setConnectedDomain(data.domain || domainInput.trim());
-      setDomainStep('done');
+      setDomainStep('instructions');
     } catch (e) {
       setDomainStep('error');
       setDomainError(e instanceof Error ? e.message : 'Something went wrong');
     }
   }, [user, activeProjectId, domainInput]);
+
+  // ─── Verify Domain DNS — Step 2: check A record ──
+  const verifyDomain = useCallback(async () => {
+    if (!user || !activeProjectId || !domainInput.trim()) return;
+    setDomainStep('verifying');
+    setDomainError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const params = new URLSearchParams({ domain: domainInput.trim(), projectId: activeProjectId });
+      const res = await fetch(`/api/hosting/verify-domain?${params}`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const data = await res.json() as { verified?: boolean; message?: string; error?: string };
+      if (data.verified) {
+        if (domainPollRef.current) clearInterval(domainPollRef.current);
+        setConnectedDomain(domainInput.trim());
+        setDomainStep('done');
+      } else {
+        setDomainStep('instructions');
+        setDomainError(data.message || 'DNS propagation pending. Try again in a few minutes.');
+      }
+    } catch (e) {
+      setDomainStep('instructions');
+      setDomainError(e instanceof Error ? e.message : 'Verification failed');
+    }
+  }, [user, activeProjectId, domainInput]);
+
+  // ─── Auto-poll every 30s while waiting for DNS ──
+  useEffect(() => {
+    if (domainStep === 'instructions') {
+      domainPollRef.current = setInterval(() => { verifyDomain(); }, 30_000);
+    } else {
+      if (domainPollRef.current) clearInterval(domainPollRef.current);
+    }
+    return () => { if (domainPollRef.current) clearInterval(domainPollRef.current); };
+  }, [domainStep, verifyDomain]);
 
   // ─── Placeholder ──
   const placeholder = step === 'idle' ? 'Describe the website you want to build...' :
@@ -3992,59 +4028,62 @@ npm run dev
                     </div>
 
                     {domainStep === 'done' && connectedDomain ? (
+                      /* ── Success state ── */
                       <div className="flex items-center gap-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-4 py-3">
                         <i className="fa-solid fa-circle-check text-emerald-400 text-sm" aria-hidden />
                         <div>
                           <p className="text-[13px] font-semibold text-white">{connectedDomain}</p>
-                          <p className="text-[11px] text-emerald-300/80">Domain connected and live</p>
+                          <p className="text-[11px] text-emerald-300/80">Your site is live at https://{connectedDomain}</p>
                         </div>
                         <a
                           href={`https://${connectedDomain}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="ml-auto text-[11px] font-bold text-emerald-300/90 hover:text-emerald-200 flex items-center gap-1"
+                          className="ml-auto text-[11px] font-bold text-emerald-300/90 hover:text-emerald-200 flex items-center gap-1 shrink-0"
                         >
                           Open <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" aria-hidden />
                         </a>
                       </div>
-                    ) : domainStep === 'instructions' || domainStep === 'verifying' || domainStep === 'error' ? (
+                    ) : domainStep === 'instructions' || domainStep === 'verifying' ? (
+                      /* ── DNS instructions + verify ── */
                       <div className="space-y-4">
-                        {/* DNS instructions */}
                         <div className="rounded-xl bg-indigo-500/10 border border-indigo-500/20 p-4">
-                          <p className="text-[12px] font-semibold text-white/70 mb-3 uppercase tracking-wider">Add this DNS record at your registrar</p>
-                          <div className="grid grid-cols-3 gap-2 text-[11px]">
-                            <div className="rounded-lg bg-black/40 px-3 py-2">
-                              <p className="text-white/35 font-semibold mb-1">Type</p>
-                              <p className="text-white font-mono">CNAME</p>
-                            </div>
-                            <div className="rounded-lg bg-black/40 px-3 py-2">
-                              <p className="text-white/35 font-semibold mb-1">Name</p>
-                              <p className="text-white font-mono">@</p>
-                            </div>
-                            <div className="rounded-lg bg-black/40 px-3 py-2 col-span-1">
-                              <p className="text-white/35 font-semibold mb-1">Value</p>
-                              <p className="text-white font-mono break-all">customers.prodevelopers.in</p>
-                            </div>
+                          <p className="text-[11px] text-white/50 mb-1">Domain: <span className="text-white font-semibold">{domainInput}</span></p>
+                          <p className="text-[12px] font-semibold text-white/70 mb-3 uppercase tracking-wider">Add this DNS record at GoDaddy / Namecheap / Hostinger</p>
+                          <div className="grid grid-cols-4 gap-2 text-[11px]">
+                            {[
+                              { label: 'Type', value: 'A' },
+                              { label: 'Name', value: '@' },
+                              { label: 'Value', value: '142.93.218.64' },
+                              { label: 'TTL', value: 'Auto' },
+                            ].map((row) => (
+                              <div key={row.label} className="rounded-lg bg-black/40 px-3 py-2">
+                                <p className="text-white/35 font-semibold mb-1">{row.label}</p>
+                                <p className="text-white font-mono break-all">{row.value}</p>
+                              </div>
+                            ))}
                           </div>
-                          <p className="mt-3 text-[11px] text-white/35">DNS changes can take up to 48 hours but usually propagate within minutes.</p>
+                          <p className="mt-3 text-[11px] text-white/35">
+                            DNS usually propagates in minutes. We&apos;re checking automatically every 30 seconds.
+                          </p>
                         </div>
 
-                        {domainStep === 'error' && domainError && (
-                          <div className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/25 px-4 py-3">
-                            <i className="fa-solid fa-triangle-exclamation text-red-400 text-sm mt-0.5" aria-hidden />
-                            <p className="text-[12px] text-red-200/90">{domainError}</p>
+                        {domainError && (
+                          <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-500/25 px-4 py-3">
+                            <i className="fa-solid fa-clock text-amber-400 text-sm mt-0.5" aria-hidden />
+                            <p className="text-[12px] text-amber-200/90">{domainError}</p>
                           </div>
                         )}
 
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={connectDomain}
+                            onClick={verifyDomain}
                             disabled={domainStep === 'verifying'}
                             className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 px-4 py-2.5 text-[12px] font-bold text-white transition-all"
                           >
                             {domainStep === 'verifying' ? (
-                              <><i className="fa-solid fa-spinner fa-spin text-sm" aria-hidden /> Verifying DNS…</>
+                              <><i className="fa-solid fa-spinner fa-spin text-sm" aria-hidden /> Checking DNS…</>
                             ) : (
                               <><i className="fa-solid fa-rotate text-sm" aria-hidden /> Verify DNS</>
                             )}
@@ -4058,7 +4097,23 @@ npm run dev
                           </button>
                         </div>
                       </div>
+                    ) : domainStep === 'error' ? (
+                      /* ── Error state ── */
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/25 px-4 py-3">
+                          <i className="fa-solid fa-triangle-exclamation text-red-400 text-sm mt-0.5" aria-hidden />
+                          <p className="text-[12px] text-red-200/90">{domainError || 'Something went wrong'}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setDomainStep('idle'); setDomainError(null); }}
+                          className="text-[12px] text-white/50 hover:text-white transition-colors"
+                        >
+                          ← Try again
+                        </button>
+                      </div>
                     ) : (
+                      /* ── Idle: domain input ── */
                       <div className="flex gap-2">
                         <input
                           type="text"
@@ -4066,16 +4121,15 @@ npm run dev
                           onChange={(e) => setDomainInput(e.target.value)}
                           placeholder="myportfolio.com"
                           className="flex-1 rounded-xl border border-white/15 bg-black/30 px-4 py-2.5 text-[13px] text-white placeholder-white/25 focus:outline-none focus:border-indigo-400/60 focus:ring-1 focus:ring-indigo-400/30 transition-all"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && domainInput.trim()) setDomainStep('instructions');
-                          }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && domainInput.trim()) connectDomain(); }}
                         />
                         <button
                           type="button"
-                          onClick={() => setDomainStep('instructions')}
-                          disabled={!domainInput.trim() || !activeProjectId}
-                          className="rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-5 py-2.5 text-[12px] font-bold text-white transition-all"
+                          onClick={connectDomain}
+                          disabled={!domainInput.trim() || !activeProjectId || domainStep === 'saving'}
+                          className="rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-5 py-2.5 text-[12px] font-bold text-white transition-all flex items-center gap-2"
                         >
+                          {domainStep === 'saving' ? <i className="fa-solid fa-spinner fa-spin" aria-hidden /> : null}
                           Connect
                         </button>
                       </div>
