@@ -246,10 +246,13 @@ export async function POST(req: NextRequest) {
     }
 
     const siteFile = form.get('site');
+    // Read buffer ONCE — reused for both Firebase Storage and Wasabi to avoid
+    // consuming the stream twice (second arrayBuffer() call returns empty).
+    let siteBuf: Buffer | null = null;
     if (siteFile instanceof File && siteFile.size > 0) {
+      siteBuf = Buffer.from(await siteFile.arrayBuffer());
       const path = projectPath(uid, projectId, 'site.html');
-      const buf = Buffer.from(await siteFile.arrayBuffer());
-      if (await tryBucketSave(bucket, path, buf, 'text/html; charset=utf-8', 'Site HTML', cloudStorageWarnings)) {
+      if (await tryBucketSave(bucket, path, siteBuf, 'text/html; charset=utf-8', 'Site HTML', cloudStorageWarnings)) {
         meta.siteCodePath = path;
       }
     }
@@ -264,11 +267,13 @@ export async function POST(req: NextRequest) {
     }
 
     const videoFile = form.get('video');
+    let videoBuf: Buffer | null = null;
+    let videoCt = 'video/mp4';
     if (videoFile instanceof File && videoFile.size > 0) {
+      videoBuf = Buffer.from(await videoFile.arrayBuffer());
+      videoCt = videoFile.type || 'video/mp4';
       const path = projectPath(uid, projectId, 'video.mp4');
-      const buf = Buffer.from(await videoFile.arrayBuffer());
-      const ct = videoFile.type || 'video/mp4';
-      if (await tryBucketSave(bucket, path, buf, ct, 'Video', cloudStorageWarnings)) {
+      if (await tryBucketSave(bucket, path, videoBuf, videoCt, 'Video', cloudStorageWarnings)) {
         meta.videoPath = path;
       }
     }
@@ -316,16 +321,14 @@ export async function POST(req: NextRequest) {
     if (uploadedPaths.length > 0) meta.uploadedImagesPaths = uploadedPaths;
 
     // --- Wasabi upload ---
-    // Uploads site.html + video files to Wasabi so the hosting server can serve them.
+    // Reuses already-read buffers (siteBuf, videoBuf) — no double arrayBuffer() reads.
     // wasabiPath is ONLY set if site.html upload actually succeeds.
     if (isWasabiConfigured()) {
       let wasabiSiteUploaded = false;
 
-      const siteFileForWasabi = form.get('site');
-      if (siteFileForWasabi instanceof File && siteFileForWasabi.size > 0) {
-        const buf = Buffer.from(await siteFileForWasabi.arrayBuffer());
+      if (siteBuf && siteBuf.length > 0) {
         try {
-          await uploadToWasabi(wasabiProjectPath(uid, projectId, 'site.html'), buf, 'text/html; charset=utf-8');
+          await uploadToWasabi(wasabiProjectPath(uid, projectId, 'site.html'), siteBuf, 'text/html; charset=utf-8');
           wasabiSiteUploaded = true;
         } catch (e) {
           console.error('[wasabi] site.html upload failed:', e);
@@ -334,15 +337,11 @@ export async function POST(req: NextRequest) {
       }
 
       if (wasabiSiteUploaded) {
-        // Upload remaining files (non-critical, failures don't block hosting)
         const extraUploads: Promise<void>[] = [];
 
-        const videoFileForWasabi = form.get('video');
-        if (videoFileForWasabi instanceof File && videoFileForWasabi.size > 0) {
-          const buf = Buffer.from(await videoFileForWasabi.arrayBuffer());
-          const ct = videoFileForWasabi.type || 'video/mp4';
+        if (videoBuf && videoBuf.length > 0) {
           extraUploads.push(
-            uploadToWasabi(wasabiProjectPath(uid, projectId, 'video.mp4'), buf, ct)
+            uploadToWasabi(wasabiProjectPath(uid, projectId, 'video.mp4'), videoBuf, videoCt)
               .catch((e) => { console.warn('[wasabi] video.mp4 upload failed:', e); }),
           );
         }
