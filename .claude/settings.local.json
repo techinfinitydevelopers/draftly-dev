@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"wasabi\\\\|WASABI\\\\|s3\\\\|S3_\\\\|ENDPOINT\" /c/Users/kunal/Desktop/Draftly-Dev --include=*.ts --include=*.tsx --include=*.js -l)"
+    ]
+  }
+}

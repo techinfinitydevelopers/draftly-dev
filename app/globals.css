@@ -1,0 +1,501 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Font family tokens — pair with app/fonts.ts (Fontsource, self-hosted) */
+:root {
+  --font-inter: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-space-grotesk: 'Space Grotesk', ui-sans-serif, sans-serif;
+  --font-jetbrains-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ===== BASE ===== */
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  @apply antialiased;
+  background: #050508;
+  color: #ededed;
+  letter-spacing: -0.01em;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/*
+ * 3D Builder full-screen shell — Safari (especially iOS) often mis-resolves `100dvh`-only
+ * sizing, which collapses flex children to zero height. Use vh + @supports(dvh).
+ * Avoid `min-height: -webkit-fill-available` on fixed shells: it can resolve incorrectly and
+ * collapse layout on some WebKit builds.
+ */
+.draftly-builder-viewport {
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  .draftly-builder-viewport {
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 100dvh;
+  }
+}
+
+
+/* ===== SIGN-IN GATE SHAKE (vigorous when user clicks blocked area) ===== */
+@keyframes sign-in-shake-vigorous {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  8% { transform: translateX(-12px) rotate(-2deg); }
+  16% { transform: translateX(12px) rotate(2deg); }
+  24% { transform: translateX(-10px) rotate(-1.5deg); }
+  32% { transform: translateX(10px) rotate(1.5deg); }
+  40% { transform: translateX(-8px) rotate(-1deg); }
+  48% { transform: translateX(8px) rotate(1deg); }
+  56% { transform: translateX(-6px) rotate(-0.5deg); }
+  64% { transform: translateX(6px) rotate(0.5deg); }
+  72% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+  88% { transform: translateX(-2px); }
+  96% { transform: translateX(2px); }
+}
+.animate-sign-in-shake-vigorous {
+  animation: sign-in-shake-vigorous 0.7s ease-in-out forwards;
+}
+
+/* ===== MOBILE STUDIO ANIMATIONS ===== */
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-left {
+  animation: slide-in-left 0.2s ease-out forwards;
+}
+
+/* Hide scrollbar but keep scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===== BACKGROUND TEXTURES — actually visible ===== */
+
+/* Noise grain overlay — z-index 2, NOT above hero/content */
+.bg-noise {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.025;
+  mix-blend-mode: overlay;
+  background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 512 512%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.75%22 numOctaves=%225%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E');
+}
+
+/* Cross-hatch line texture — PROMINENT grunge grid */
+.bg-lines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 1;
+  background-image:
+    /* Diagonal lines - forward slash */
+    repeating-linear-gradient(45deg,
+      transparent,
+      transparent 40px,
+      rgba(255, 255, 255, 0.055) 40px,
+      rgba(255, 255, 255, 0.055) 41px),
+    /* Diagonal lines - back slash */
+    repeating-linear-gradient(-45deg,
+      transparent,
+      transparent 40px,
+      rgba(255, 255, 255, 0.04) 40px,
+      rgba(255, 255, 255, 0.04) 41px);
+}
+
+/* Grid lines — PROMINENT visible squares */
+.bg-grid-global {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 1;
+  background-size: 80px 80px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+}
+
+/* Small dot-matrix pattern — MORE visible */
+.bg-dots {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.7;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Vignette — disabled to keep hero image clean */
+.bg-vignette {
+  display: none;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ===== SELECTION ===== */
+::selection {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* ================================================================
+   GLASSMORPHISM SYSTEM — NO translateY on any hover
+   ================================================================ */
+
+/* Glass card — frosted translucent panel */
+.glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glass-card:hover::before {
+  opacity: 1;
+}
+
+/* Solid card (darker, non-transparent) */
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+/* Stat card — for numbers/stats */
+.stat-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 1.25rem;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stat-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ================================================================
+   GLASSMORPHISM BUTTONS — NO translateY on any hover
+   ================================================================ */
+
+.btn-glass {
+  @apply px-7 py-3.5 rounded-full font-semibold text-sm transition-all duration-300 inline-flex items-center gap-2;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.btn-glass-light {
+  @apply px-7 py-3.5 rounded-full font-semibold text-sm transition-all duration-300 inline-flex items-center gap-2;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: #111;
+}
+
+.btn-glass-light:hover {
+  background: rgba(255, 255, 255, 0.65);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.15);
+}
+
+.btn-white {
+  @apply px-7 py-3.5 rounded-full font-semibold text-sm transition-all duration-300 inline-flex items-center gap-2;
+  background: #fff;
+  color: #000;
+}
+
+.btn-white:hover {
+  background: #e5e5e5;
+  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.1), 0 0 60px rgba(255, 255, 255, 0.03);
+}
+
+.btn-outline {
+  @apply px-7 py-3.5 rounded-full font-medium text-sm transition-all duration-300 inline-flex items-center gap-2;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.btn-primary-glow {
+  @apply px-8 py-3.5 rounded-full font-semibold text-sm transition-all duration-300 inline-flex items-center gap-2;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.btn-primary-glow:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 40px rgba(255, 255, 255, 0.08);
+}
+
+/* ================================================================
+   DIVIDERS & TAGS
+   ================================================================ */
+
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+}
+
+.tag {
+  @apply inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ===== BOX GRID PATTERN ===== */
+.bg-box-grid {
+  background-size: 60px 60px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* ===== AMBIENT GLOW UTILITIES ===== */
+.glow-top {
+  position: relative;
+}
+
+.glow-top::before {
+  content: '';
+  position: absolute;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.02) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.glow-left {
+  position: relative;
+}
+
+.glow-left::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -100px;
+  transform: translateY(-50%);
+  width: 400px;
+  height: 500px;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.015) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.glow-right {
+  position: relative;
+}
+
+.glow-right::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -100px;
+  transform: translateY(-50%);
+  width: 400px;
+  height: 500px;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.015) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ===== SECTION GLOW BACKGROUNDS — colored ambient blobs ===== */
+section {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ===== STUDIO / REACT FLOW ===== */
+.studio-canvas .react-flow__node {
+  font-family: inherit;
+}
+
+.studio-canvas .react-flow__edge-path {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+
+.studio-canvas .react-flow__connection-line {
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1.5;
+}
+
+.studio-canvas .react-flow__controls {
+  bottom: 16px;
+  left: 16px;
+}
+
+.studio-canvas .react-flow__minimap {
+  bottom: 16px;
+  right: 16px;
+}
+
+.studio-canvas .react-flow__handle {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: 2.5px solid rgba(139, 92, 246, 0.5) !important;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 6px rgba(139, 92, 246, 0.25), 0 0 0 4px rgba(139, 92, 246, 0.1);
+  cursor: crosshair;
+  z-index: 10;
+}
+
+.studio-canvas .react-flow__handle:hover {
+  width: 22px !important;
+  height: 22px !important;
+  background: #fff !important;
+  border-color: rgba(139, 92, 246, 0.9) !important;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.6), 0 0 0 6px rgba(139, 92, 246, 0.15);
+}
+
+.studio-canvas .react-flow__handle-connecting {
+  width: 22px !important;
+  height: 22px !important;
+  background: #a78bfa !important;
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.7), 0 0 0 6px rgba(139, 92, 246, 0.2);
+  animation: handle-pulse 1s ease-in-out infinite;
+}
+
+.studio-canvas .react-flow__handle-valid {
+  width: 22px !important;
+  height: 22px !important;
+  background: #34d399 !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 20px rgba(52, 211, 153, 0.7), 0 0 0 6px rgba(52, 211, 153, 0.2);
+  animation: handle-pulse-green 1s ease-in-out infinite;
+}
+
+@keyframes handle-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.7), 0 0 0 6px rgba(139, 92, 246, 0.2); }
+  50% { box-shadow: 0 0 24px rgba(139, 92, 246, 0.9), 0 0 0 10px rgba(139, 92, 246, 0.1); }
+}
+
+@keyframes handle-pulse-green {
+  0%, 100% { box-shadow: 0 0 20px rgba(52, 211, 153, 0.7), 0 0 0 6px rgba(52, 211, 153, 0.2); }
+  50% { box-shadow: 0 0 24px rgba(52, 211, 153, 0.9), 0 0 0 10px rgba(52, 211, 153, 0.1); }
+}
+
+/* ===== CUSTOM GRADIENT RADIAL ===== */
+.bg-gradient-radial {
+  background: radial-gradient(var(--tw-gradient-stops));
+}

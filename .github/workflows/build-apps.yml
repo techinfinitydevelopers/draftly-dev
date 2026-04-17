@@ -1,0 +1,115 @@
+# Draftly: Build Android (.aab) and iOS (.ipa) from Capacitor project ZIP
+# Triggered by API: workflow_dispatch with inputs zip_url, project_id, project_name
+name: Build App Store artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      zip_url:
+        description: 'Signed URL to project ZIP (from Firebase Storage)'
+        required: true
+      project_id:
+        description: 'Draftly project ID'
+        required: true
+      project_name:
+        description: 'Project name for artifact names'
+        required: false
+        default: 'app'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download project ZIP
+        run: |
+          curl -sL "${{ inputs.zip_url }}" -o project.zip
+          unzip -q project.zip -d project
+          ls -la project/
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: project/package-lock.json
+
+      - name: Install dependencies and build web app
+        working-directory: project
+        run: |
+          npm install
+          npm run build
+
+      - name: Remove node_modules to shrink artifact
+        working-directory: project
+        run: rm -rf node_modules .next
+
+      - name: Upload project (for Android/iOS jobs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-built
+          path: project/
+          retention-days: 1
+
+  build-android:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download built project
+        uses: actions/download-artifact@v4
+        with:
+          name: project-built
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Add Capacitor Android
+        run: |
+          npx cap add android
+          npx cap sync
+
+      - name: Build Android AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+
+      - name: Upload Android AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: android/app/build/outputs/bundle/release/*.aab
+
+  build-ios:
+    needs: prepare
+    runs-on: macos-latest
+    steps:
+      - name: Download built project
+        uses: actions/download-artifact@v4
+        with:
+          name: project-built
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Add Capacitor iOS
+        run: |
+          npx cap add ios
+          npx cap sync
+
+      # iOS .ipa build requires code signing (Apple cert). For now we produce the Xcode project;
+      # user can open ios/App in Xcode and Archive to get .ipa, or add APPLE_TEAM_ID + cert to secrets.
+      - name: List iOS project (ready for Xcode)
+        run: ls -la ios/App/

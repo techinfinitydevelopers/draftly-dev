@@ -1,0 +1,144 @@
+# dependencies
+/node_modules
+
+# Studio generated outputs
+/public/studio-outputs/
+/local-server/.venv/
+/local-server/outputs/
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files - NEVER COMMIT THESE
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+
+# documentation and debug files
+*_FIX.md
+*_SUMMARY.md
+*_CHECKLIST.md
+*_INSTRUCTIONS.md
+*_GUIDE.md
+*_SETUP.md
+DEBUG_*.md
+TROUBLESHOOTING_*.md
+QUICK_FIX_*.txt
+FIREBASE_RULES_*.txt
+START_HERE.md
+TEST_*.md
+RACE_CONDITION_FIX.md
+PROFILE_TEXT_FIX.md
+IFRAME_CORS_FIX.md
+*.bat
+copy-profile-picture.bat
+fix-everything.bat
+
+# temp files
+profilepic.png
+
+# test pages
+app/test-firebase/
+
+# Firebase service account / credentials - NEVER COMMIT
+firebase-service-account.json
+firebase-admin-key.json
+firebase-admin-key*.json
+firebase-adminsdk.local.json
+*.service-account.json
+*.admin-key.json
+*credentials*.json
+*service-account*.json
+
+# Admin scripts with hardcoded keys - NEVER COMMIT
+/scripts/
+
+# Vendored third-party SDKs (use npm instead)
+/razorpay-node-master/
+
+# Kiro specs
+.kiro/
+
+# Admin upgrade routes (security risk)
+/app/api/admin/
+
+# Root-level admin/debug scripts
+/check-*.js
+/fix-*.js
+/reset-*.js
+/upgrade-*.js
+/screenshot.js
+*.cjs
+/test-*.cjs
+/grant-*.cjs
+/inspect-*.cjs
+/list-*.cjs
+/audit-*.cjs
+/dodo-*.cjs
+/full-*.cjs
+/get-*.cjs
+/count-*.cjs
+/direct-*.cjs
+/final-*.cjs
+/paid-*.csv
+
+# Generated subscriber table (run scripts/list-subscribers-table.mjs)
+subscribers-table.html
+
+# Email export (run: npm run export-signup-emails / export-signup-emails-csv)
+firebase-signup-emails-export.txt
+firebase-signup-emails-export.csv
+firebase-signups-latest-earliest-2000.csv
+
+# Duplicate lockfiles (project uses npm)
+pnpm-lock.yaml
+yarn.lock
+
+# Duplicate env examples
+.env.local.example
+
+# Test/debug pages
+/app/pricing-test/
+/app/pricing-simple/
+/app/env-check/
+
+# Legacy payment SDKs
+/app/api/gumroad/
+
+# Cursor/IDE project files
+.cursor/
+
+# External/oss folders (not part of main build)
+draftly-studio-oss/
