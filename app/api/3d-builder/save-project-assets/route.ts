@@ -315,43 +315,51 @@ export async function POST(req: NextRequest) {
     }
     if (uploadedPaths.length > 0) meta.uploadedImagesPaths = uploadedPaths;
 
-    // --- Wasabi upload (parallel, non-blocking on failure) ---
+    // --- Wasabi upload ---
     // Uploads site.html + video files to Wasabi so the hosting server can serve them.
-    // Firebase Storage upload above is unchanged — this is additive.
+    // wasabiPath is ONLY set if site.html upload actually succeeds.
     if (isWasabiConfigured()) {
-      const wasabiUploads: Promise<void>[] = [];
+      let wasabiSiteUploaded = false;
 
       const siteFileForWasabi = form.get('site');
       if (siteFileForWasabi instanceof File && siteFileForWasabi.size > 0) {
         const buf = Buffer.from(await siteFileForWasabi.arrayBuffer());
-        wasabiUploads.push(
-          uploadToWasabi(wasabiProjectPath(uid, projectId, 'site.html'), buf, 'text/html; charset=utf-8')
-            .catch((e) => { console.warn('[wasabi] site.html upload failed:', e); }),
-        );
+        try {
+          await uploadToWasabi(wasabiProjectPath(uid, projectId, 'site.html'), buf, 'text/html; charset=utf-8');
+          wasabiSiteUploaded = true;
+        } catch (e) {
+          console.error('[wasabi] site.html upload failed:', e);
+          cloudStorageWarnings.push(`Wasabi upload failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
       }
 
-      const videoFileForWasabi = form.get('video');
-      if (videoFileForWasabi instanceof File && videoFileForWasabi.size > 0) {
-        const buf = Buffer.from(await videoFileForWasabi.arrayBuffer());
-        const ct = videoFileForWasabi.type || 'video/mp4';
-        wasabiUploads.push(
-          uploadToWasabi(wasabiProjectPath(uid, projectId, 'video.mp4'), buf, ct)
-            .catch((e) => { console.warn('[wasabi] video.mp4 upload failed:', e); }),
-        );
-      }
+      if (wasabiSiteUploaded) {
+        // Upload remaining files (non-critical, failures don't block hosting)
+        const extraUploads: Promise<void>[] = [];
 
-      for (let i = 0; i < 20; i++) {
-        const f = form.get(`videoChain_${i}`);
-        if (!(f instanceof File) || f.size === 0) break;
-        const buf = Buffer.from(await f.arrayBuffer());
-        wasabiUploads.push(
-          uploadToWasabi(wasabiProjectPath(uid, projectId, `video-chain-${i}.mp4`), buf, f.type || 'video/mp4')
-            .catch((e) => { console.warn(`[wasabi] video-chain-${i}.mp4 upload failed:`, e); }),
-        );
-      }
+        const videoFileForWasabi = form.get('video');
+        if (videoFileForWasabi instanceof File && videoFileForWasabi.size > 0) {
+          const buf = Buffer.from(await videoFileForWasabi.arrayBuffer());
+          const ct = videoFileForWasabi.type || 'video/mp4';
+          extraUploads.push(
+            uploadToWasabi(wasabiProjectPath(uid, projectId, 'video.mp4'), buf, ct)
+              .catch((e) => { console.warn('[wasabi] video.mp4 upload failed:', e); }),
+          );
+        }
 
-      await Promise.all(wasabiUploads);
-      meta.wasabiPath = `users/${uid}/projects/${projectId}/`;
+        for (let i = 0; i < 20; i++) {
+          const f = form.get(`videoChain_${i}`);
+          if (!(f instanceof File) || f.size === 0) break;
+          const buf = Buffer.from(await f.arrayBuffer());
+          extraUploads.push(
+            uploadToWasabi(wasabiProjectPath(uid, projectId, `video-chain-${i}.mp4`), buf, f.type || 'video/mp4')
+              .catch((e) => { console.warn(`[wasabi] video-chain-${i}.mp4 upload failed:`, e); }),
+          );
+        }
+
+        await Promise.all(extraUploads);
+        meta.wasabiPath = `users/${uid}/projects/${projectId}/`;
+      }
     }
     // --- End Wasabi upload ---
 
