@@ -1,9 +1,7 @@
 'use client';
 
 import { motion, useInView, AnimatePresence } from 'framer-motion';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -96,12 +94,8 @@ function Reveal({ children, delay = 0, className = '', direction = 'up' }: { chi
 }
 
 export default function PricingSection() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { user } = useAuth();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [annual, setAnnual] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const activeIndex = 2; // highlight Pro ($60)
 
   const [isMobile, setIsMobile] = useState(false);
@@ -113,38 +107,6 @@ export default function PricingSection() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // When returning from successful checkout, trigger subscription verify so Firestore updates immediately
-  useEffect(() => {
-    if (searchParams.get('checkout') === 'success' && user?.uid && user?.email) {
-      user.getIdToken().then((token) =>
-        fetch(`/api/dodo/verify?userId=${encodeURIComponent(user.uid)}&email=${encodeURIComponent(user.email!)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-      ).then((r) => r.json()).then((res: { activated?: boolean; plan?: string }) => {
-        if (res.activated && typeof res.plan === 'string') {
-          window.history.replaceState({}, '', '/pricing');
-        }
-      }).catch(() => {});
-    }
-  }, [searchParams, user?.uid, user?.email]);
-
-  const handleCheckout = async (plan: 'basic' | 'basic-plus' | 'pro' | 'premium') => {
-    if (!user) {
-      router.push('/onboarding');
-      return;
-    }
-    setCheckoutLoading(plan);
-    try {
-      const res = await fetch('/api/dodo/create-checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan, email: user.email, name: user.displayName || undefined, userId: user.uid }) });
-      const raw = await res.text();
-      let data: Record<string, unknown> = {};
-      try { data = raw ? JSON.parse(raw) : {}; } catch { alert(`Checkout failed: ${raw || res.status}`); setCheckoutLoading(null); return; }
-      if (!res.ok) { alert(`Checkout failed: ${data.error || data.message || res.status}`); setCheckoutLoading(null); return; }
-      const url = typeof data.checkout_url === 'string' ? data.checkout_url : '';
-      if (!url) { alert('Checkout failed.'); setCheckoutLoading(null); return; }
-      window.location.href = url;
-    } catch { alert('Something went wrong.'); setCheckoutLoading(null); }
-  };
 
   /** One-line disclaimer at bottom of tier; icon + compact row (see finePrint render). */
   const noCloudSaveNote = 'No cloud backup—download from the builder before you leave.';
@@ -394,13 +356,12 @@ export default function PricingSection() {
                 )}
               </div>
 
-              <button 
-                onClick={() => (user ? handleCheckout(plan.planId as 'basic' | 'basic-plus' | 'pro' | 'premium') : router.push('/onboarding'))}
-                disabled={checkoutLoading !== null}
-                className={`w-full py-2.5 rounded-lg text-[13px] font-bold mb-2 transition-colors ${plan.buttonClass}`}
+              <Link
+                href="/contact"
+                className={`w-full py-2.5 rounded-lg text-[13px] font-bold mb-2 transition-colors text-center block ${plan.buttonClass} opacity-80`}
               >
-                {checkoutLoading === plan.planId ? 'Redirecting...' : plan.buttonText}
-              </button>
+                Coming Soon — Contact Us
+              </Link>
 
               <div className="mb-4 h-[12px]" />
 

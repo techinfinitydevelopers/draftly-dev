@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import Header from '@/components/Header';
 import GrungeBackground from '@/components/GrungeBackground';
 import { useAuth } from '@/hooks/useAuth';
@@ -60,17 +60,9 @@ export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [recentProjects, setRecentProjects] = useState<ThreeDProject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [cancelMessage, setCancelMessage] = useState('');
-  const [cancelError, setCancelError] = useState('');
   const [projectPreviews, setProjectPreviews] = useState<Record<string, string>>({});
   const fetchedPreviewsRef = useRef<Set<string>>(new Set());
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelStep, setCancelStep] = useState(1);
-  const [cancelTypedText, setCancelTypedText] = useState('');
   const router = useRouter();
-
-  const CANCEL_CONFIRM_WORD = 'cancel';
 
   // Lazy-load site code for Firebase-only projects (for profile card preview)
   useEffect(() => {
@@ -246,56 +238,6 @@ export default function Profile() {
     }
   };
 
-  const handleCancelAtPeriodEnd = async () => {
-    if (!user) return;
-    setCancelLoading(true);
-    setCancelMessage('');
-    setCancelError('');
-
-    try {
-      const res = await fetch('/api/dodo/cancel-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setCancelError(data?.error || 'Unable to cancel subscription.');
-        return;
-      }
-
-      setCancelMessage(
-        data?.endDate
-          ? `Cancellation scheduled. Your access remains active until ${formatDate(data.endDate)}.`
-          : 'Cancellation scheduled at period end.',
-      );
-      setShowCancelModal(false);
-      setCancelStep(1);
-      setCancelTypedText('');
-    } catch (error) {
-      devError('Cancel subscription error', error);
-      setCancelError('Unable to cancel subscription right now. Please try again.');
-    } finally {
-      setCancelLoading(false);
-    }
-  };
-
-  const openCancelModal = () => {
-    setShowCancelModal(true);
-    setCancelStep(1);
-    setCancelTypedText('');
-    setCancelMessage('');
-    setCancelError('');
-  };
-
-  const closeCancelModal = () => {
-    if (!cancelLoading) {
-      setShowCancelModal(false);
-      setCancelStep(1);
-      setCancelTypedText('');
-    }
-  };
 
   if (authLoading || loading) {
     return (
@@ -643,26 +585,9 @@ export default function Profile() {
                   </p>
                   <p className="text-mist">
                     <span className="text-white">Status:</span>{' '}
-                    {subscription.cancelAtPeriodEnd ? 'Active (cancels at period end)' : subscription.status}
+                    {subscription.status}
                   </p>
                 </div>
-
-                {isPaidPlan && (
-                  <div className="mt-4">
-                    <button
-                      onClick={subscription.cancelAtPeriodEnd ? undefined : openCancelModal}
-                      disabled={subscription.cancelAtPeriodEnd}
-                      className="px-5 py-2.5 bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {subscription.cancelAtPeriodEnd ? 'Cancellation Scheduled' : 'Cancel Subscription'}
-                    </button>
-                    <p className="text-mist text-xs mt-2">
-                      Cancel from profile. Keep all paid benefits until the end of your current billing period.
-                    </p>
-                    {cancelMessage && <p className="text-green-400 text-xs mt-2">{cancelMessage}</p>}
-                    {cancelError && <p className="text-red-400 text-xs mt-2">{cancelError}</p>}
-                  </div>
-                )}
               </div>
 
               {isPaidPlan && (
@@ -694,135 +619,6 @@ export default function Profile() {
           </div>
         </div>
       </section>
-
-      {/* Cancel Subscription Modal — multi-step retention flow */}
-      <AnimatePresence>
-        {showCancelModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={(e) => {
-              // Only close when clicking the backdrop itself, not the modal content.
-              if (e.target === e.currentTarget) closeCancelModal();
-            }}
-            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="bg-[#0e0e18] border border-white/10 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl"
-            >
-              <div className="p-6 md:p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="font-display text-xl text-white">Cancel Subscription</h2>
-                  <button
-                    onClick={closeCancelModal}
-                    disabled={cancelLoading}
-                    className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition"
-                  >
-                    <i className="fa-solid fa-times text-sm" />
-                  </button>
-                </div>
-
-                {cancelStep === 1 && (
-                  <motion.div
-                    key="step1"
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="space-y-5"
-                  >
-                    <p className="text-white/80 text-[15px] leading-relaxed">
-                      We&apos;re sorry to see you go. Draftly is one of the best 3D website builders out there — 
-                      cinematic AI visuals, scroll-driven experiences, and full app generation in one place.
-                    </p>
-                    <p className="text-white/60 text-[14px]">
-                      Before you leave, here are some options that might work better for you:
-                    </p>
-                    <div className="space-y-3">
-                      <div className="border border-stone rounded-xl p-4 bg-white/[0.02]">
-                        <p className="text-white font-semibold text-sm mb-1">10% next-cycle discount</p>
-                        <p className="text-mist text-xs">Stay active and get 10% off your next invoice.</p>
-                        <button
-                          onClick={closeCancelModal}
-                          className="mt-3 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/30 transition"
-                        >
-                          Keep my subscription
-                        </button>
-                      </div>
-                      <div className="border border-stone rounded-xl p-4 bg-white/[0.02]">
-                        <p className="text-white font-semibold text-sm mb-1">+500 credits loyalty bonus</p>
-                        <p className="text-mist text-xs">Complete 2 consecutive months for a one-time credit boost.</p>
-                        <button
-                          onClick={closeCancelModal}
-                          className="mt-3 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/30 transition"
-                        >
-                          Keep my subscription
-                        </button>
-                      </div>
-                      <div className="border border-stone rounded-xl p-4 bg-white/[0.02]">
-                        <p className="text-white font-semibold text-sm mb-1">Switch to annual — save 20%</p>
-                        <p className="text-mist text-xs">Lock in a larger discount with priority support.</p>
-                        <button
-                          onClick={() => { closeCancelModal(); router.push('/pricing'); }}
-                          className="mt-3 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/30 transition"
-                        >
-                          View annual plans
-                        </button>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setCancelStep(2)}
-                      className="w-full py-3 border border-stone text-mist hover:text-white hover:bg-graphite rounded-xl text-sm font-mono transition"
-                    >
-                      I still want to cancel
-                    </button>
-                  </motion.div>
-                )}
-
-                {cancelStep === 2 && (
-                  <motion.div
-                    key="step2"
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="space-y-5"
-                  >
-                    <p className="text-white/80 text-[15px] leading-relaxed">
-                      To confirm cancellation, type <span className="font-mono font-bold text-white">&quot;cancel&quot;</span> below.
-                    </p>
-                    <input
-                      type="text"
-                      value={cancelTypedText}
-                      onChange={(e) => setCancelTypedText(e.target.value.toLowerCase().trim())}
-                      placeholder="Type cancel to confirm"
-                      className="w-full px-4 py-3 rounded-xl bg-[#0b0b10] border border-white/15 text-white placeholder:text-white/30 font-mono text-sm focus:outline-none focus:border-white/30"
-                      autoFocus
-                    />
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => { setCancelStep(1); setCancelTypedText(''); }}
-                        className="flex-1 py-3 border border-stone text-white hover:bg-graphite rounded-xl text-sm font-mono transition"
-                      >
-                        Go back
-                      </button>
-                      <button
-                        onClick={handleCancelAtPeriodEnd}
-                        disabled={cancelTypedText !== CANCEL_CONFIRM_WORD || cancelLoading}
-                        className="flex-1 py-3 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {cancelLoading ? 'Cancelling...' : 'Confirm cancellation'}
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Footer */}
       <footer className="py-12 border-t border-stone bg-obsidian">

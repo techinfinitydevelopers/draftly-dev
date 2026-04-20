@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from './useAuth';
@@ -18,13 +18,6 @@ export interface Subscription {
   endDate?: string;
   generationsUsed: number;
   generationsLimit: number;
-  // Dodo Payments
-  dodoSubscriptionId?: string;
-  dodoCustomerId?: string;
-  dodoProductId?: string;
-  cancelAtPeriodEnd?: boolean;
-  cancelRequestedAt?: string;
-  cancelledAt?: string;
   // Gumroad (legacy)
   gumroadSubscriptionId?: string;
   gumroadEmail?: string;
@@ -72,10 +65,6 @@ export function useSubscription() {
     projects: {},
   });
   const [loading, setLoading] = useState(true);
-  /** Dedupe verify for free/inactive users (same snapshot state). */
-  const lastActivationVerifyKeyRef = useRef<string>('');
-  /** Wall-clock throttle for paid users: reconcile with Dodo often enough to pick up upgrades without hammering the API. */
-  const lastDodoReconcileAtRef = useRef(0);
 
   const normalizePlan = (plan: unknown): Subscription['plan'] => {
     const v = String(plan || 'free').trim().toLowerCase().replace(/\s+/g, '-');
@@ -122,7 +111,7 @@ export function useSubscription() {
             setDoc(userRef, { email: normalizedEmail }, { merge: true }).catch(() => {});
           }
 
-          // Reconcile Firestore with Dodo (pending checkouts + plan upgrades). Paid users were only synced once/day before, so upgrades looked "stuck" for up to 24h.
+          // Read subscription data from Firestore snapshot.
           const sub = (data.subscription || {}) as Record<string, unknown>;
           const currentPlan = normalizePlan(sub.plan);
           const currentStatus = normalizeStatus(sub.status);
@@ -147,47 +136,6 @@ export function useSubscription() {
             }).catch(() => {});
           }
 
-          const needsActivationVerify =
-            Boolean(normalizedEmail) &&
-            (!data.subscription || currentPlan === 'free' || currentStatus !== 'active');
-
-          const isPaidActive =
-            Boolean(normalizedEmail) &&
-            currentStatus === 'active' &&
-            currentPlan !== 'free' &&
-            currentPlan !== 'tester' &&
-            currentPlan !== 'testing';
-
-          const PAID_DODO_RECONCILE_MS = 120_000;
-
-          const runDodoVerify = () => {
-            lastDodoReconcileAtRef.current = Date.now();
-            user
-              .getIdToken()
-              .then((token) =>
-                fetch(
-                  `/api/dodo/verify?userId=${encodeURIComponent(user.uid)}&email=${encodeURIComponent(normalizedEmail)}`,
-                  { headers: { Authorization: `Bearer ${token}` } },
-                ),
-              )
-              .then((r) => r.json())
-              .then(() => {})
-              .catch(() => {});
-          };
-
-          if (needsActivationVerify) {
-            const verifyKey = `${user.uid}:${normalizedEmail}:${currentPlan}:${currentStatus}:${String(sub.dodoSubscriptionId || '')}`;
-            if (lastActivationVerifyKeyRef.current !== verifyKey) {
-              lastActivationVerifyKeyRef.current = verifyKey;
-              runDodoVerify();
-            }
-          } else if (isPaidActive) {
-            const now = Date.now();
-            if (now - lastDodoReconcileAtRef.current >= PAID_DODO_RECONCILE_MS) {
-              runDodoVerify();
-            }
-          }
-          
           if (data.subscription) {
             const raw = data.subscription as Record<string, unknown>;
             setSubscription({
@@ -199,12 +147,6 @@ export function useSubscription() {
               orderId: (raw.orderId as string) || undefined,
               startDate: (raw.startDate as string) || undefined,
               endDate: (raw.endDate as string) || undefined,
-              dodoSubscriptionId: (raw.dodoSubscriptionId as string) || undefined,
-              dodoCustomerId: (raw.dodoCustomerId as string) || undefined,
-              dodoProductId: (raw.dodoProductId as string) || undefined,
-              cancelAtPeriodEnd: (raw.cancelAtPeriodEnd as boolean) || undefined,
-              cancelRequestedAt: (raw.cancelRequestedAt as string) || undefined,
-              cancelledAt: (raw.cancelledAt as string) || undefined,
               gumroadSubscriptionId: (raw.gumroadSubscriptionId as string) || undefined,
               gumroadEmail: (raw.gumroadEmail as string) || undefined,
               customStudioCredits:
@@ -326,19 +268,6 @@ export function useSubscription() {
   const fullAppsLimit = isOwner ? 999999 : (fullAppsLimitMap[subscription.plan] || 0);
   const fullAppsRemaining = isOwner ? 999999 : Math.max(0, fullAppsLimit - (generationTracking.fullAppsGenerated || 0));
 
-  /** Force a verify call to reconcile subscription from Dodo. Call when API returns requiresUpgrade but user believes they paid. */
-  const refreshSubscription = useCallback(() => {
-    if (!user?.email || !user?.uid) return;
-    const normalizedEmail = (user.email || '').trim().toLowerCase();
-    user.getIdToken().then((token) =>
-      fetch(`/api/dodo/verify?userId=${encodeURIComponent(user.uid)}&email=${encodeURIComponent(normalizedEmail)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-    )
-      .then((r) => r.json())
-      .then(() => {})
-      .catch(() => {});
-  }, [user]);
 
   return {
     subscription,
@@ -352,6 +281,5 @@ export function useSubscription() {
     generationsRemaining,
     fullAppsRemaining,
     fullAppsLimit,
-    refreshSubscription,
   };
 }

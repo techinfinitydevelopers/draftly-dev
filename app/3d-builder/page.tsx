@@ -502,7 +502,7 @@ type MobilePane = 'chat' | 'workspace';
 // ─── Main ────────────────────────────────────────────────────────
 function ThreeDBuilderInner() {
   const { user, loading: authLoading } = useAuth();
-  const { subscription, generationTracking, isOwner, refreshSubscription, loading: subLoading } = useSubscription();
+  const { subscription, generationTracking, isOwner, loading: subLoading } = useSubscription();
   const searchParams = useSearchParams();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
@@ -2258,7 +2258,6 @@ function ThreeDBuilderInner() {
         typeof err?.message === 'string' &&
         (/requires upgrade|exclusively available for paid plans/i.test(err.message))
       ) {
-        refreshSubscription(); // Reconcile from Dodo in case user paid but subscription wasn't synced
         openUpgradePopup(
           'Upgrade Required',
           'The 3D Website Builder is a premium feature. Please upgrade your plan to continue.',
@@ -2270,7 +2269,7 @@ function ThreeDBuilderInner() {
       }
     }
     setSending(false);
-  }, [input, sending, step, bgPrompt, bgImageUrl, videoBase64, siteCode, webpFrames.length, sitePrompt, messages, chatPromptMaxChars, push, generateImage, generateVideo, prepareWebsite, isProUser, activeProjectId, buildTarget, uploadedImages, uploadedImages.length, user?.uid, authLoading, readApiResponse, openUpgradePopup, getOrCreateDeviceId, refreshSubscription, graphicsStackPicks]);
+  }, [input, sending, step, bgPrompt, bgImageUrl, videoBase64, siteCode, webpFrames.length, sitePrompt, messages, chatPromptMaxChars, push, generateImage, generateVideo, prepareWebsite, isProUser, activeProjectId, buildTarget, uploadedImages, uploadedImages.length, user?.uid, authLoading, readApiResponse, openUpgradePopup, getOrCreateDeviceId, graphicsStackPicks]);
 
   const downloadZip = useCallback(async () => {
     if (!siteCode) return;

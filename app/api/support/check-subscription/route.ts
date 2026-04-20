@@ -3,14 +3,12 @@
  *
  * Owner-only: Check subscription status for a user by email.
  * If grant=basic|basic-plus|pro|premium|tester, update their subscription.
- * If syncFromDodo=1, pull live plan from Dodo and update Firestore (upgrade mismatches).
  * Use: Authorization: Bearer <Firebase ID token>
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { isOwnerEmail } from '@/lib/owner-emails';
 import { tryVerifyAuth } from '@/lib/verify-auth';
-import { syncUserSubscriptionFromDodo } from '@/lib/sync-user-plan-from-dodo';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -45,38 +43,6 @@ export async function GET(req: NextRequest) {
 
     const adminAuth = getAdminAuth();
 
-    if (searchParams.get('syncFromDodo') === '1') {
-      const db = getAdminDb();
-      let uids: string[] = [];
-      try {
-        const userRecord = await adminAuth.getUserByEmail(email);
-        uids = [userRecord.uid];
-      } catch (e: unknown) {
-        const code = (e as { code?: string })?.code;
-        if (code === 'auth/user-not-found') {
-          const usersSnap = await db.collection('users').where('email', '==', email).limit(5).get();
-          uids = usersSnap.docs.map((d) => d.id);
-        } else {
-          throw e;
-        }
-      }
-      if (!uids.length) {
-        return NextResponse.json(
-          { error: 'No Firebase user or Firestore doc for this email', email },
-          { status: 404 },
-        );
-      }
-      const results = await Promise.all(
-        uids.map(async (uid) => ({ uid, ...(await syncUserSubscriptionFromDodo(uid, email)) })),
-      );
-      return NextResponse.json({
-        email,
-        syncFromDodo: true,
-        results,
-        hint: 'Open the app signed in as this user so /api/dodo/verify runs, or use this endpoint after deploy.',
-      });
-    }
-
     const db = getAdminDb();
 
     // Find Firebase Auth user by email (handles multiple accounts)
@@ -110,8 +76,6 @@ export async function GET(req: NextRequest) {
                     generationsLimit: limits,
                     startDate: sub.startDate || now,
                     endDate: null,
-                    cancelAtPeriodEnd: false,
-                    cancelledAt: null,
                     updatedAt: now,
                   },
                   generationTracking: {
@@ -181,8 +145,6 @@ export async function GET(req: NextRequest) {
               generationsLimit: limits,
               startDate: sub.startDate || now,
               endDate: null,
-              cancelAtPeriodEnd: false,
-              cancelledAt: null,
               updatedAt: now,
             },
             generationTracking: {
