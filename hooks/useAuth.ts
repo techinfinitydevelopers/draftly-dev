@@ -86,6 +86,7 @@ export function useAuth() {
         return result.user;
       }
     } catch (error) {
+      console.error('[Auth] Sign in error:', error);
       devError('Error signing in', error);
       const err = error as { code?: string };
       if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/popup-closed-by-user') {
