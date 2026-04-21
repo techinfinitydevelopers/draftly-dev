@@ -99,13 +99,29 @@ async function saveProjectToFirebaseViaApi(
 
   const fd = new FormData();
   fd.append('projectId', projectId);
+
+  // If bgImageUrl is a data URL, send it as a separate blob to avoid 413 (Vercel body size limit).
+  // Pass a sentinel in meta so the server knows to read from the 'bgImage' form field instead.
+  let bgImageUrlForMeta: string | null = payload.bgImageUrl;
+  if (payload.bgImageUrl?.startsWith('data:image/')) {
+    const m = payload.bgImageUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/s);
+    if (m) {
+      const binary = atob(m[2]!);
+      const bytes = new Uint8Array(binary.length);
+      for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+      const ext = m[1]!.includes('png') ? 'png' : m[1]!.includes('webp') ? 'webp' : 'jpg';
+      fd.append('bgImage', new Blob([bytes], { type: m[1] }), `bg.${ext}`);
+      bgImageUrlForMeta = '__bgImage_form_field__';
+    }
+  }
+
   fd.append(
     'meta',
     JSON.stringify({
       name: payload.name,
       sitePrompt: payload.sitePrompt,
       bgPrompt: payload.bgPrompt,
-      bgImageUrl: payload.bgImageUrl,
+      bgImageUrl: bgImageUrlForMeta,
       renderMode: payload.renderMode,
       buildTarget: payload.buildTarget,
       generatedImageUrls: payload.generatedImageUrls,

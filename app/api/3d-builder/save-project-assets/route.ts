@@ -195,6 +195,17 @@ export async function POST(req: NextRequest) {
     const bucket = bucketName ? storage.bucket(bucketName) : storage.bucket();
     const cloudStorageWarnings: string[] = [];
 
+    // If client sent bgImage as a separate form field (to avoid 413), reconstruct the data URL
+    if (metaIn.bgImageUrl === '__bgImage_form_field__') {
+      const bgImageFile = form.get('bgImage');
+      if (bgImageFile instanceof File && bgImageFile.size > 0) {
+        const buf = Buffer.from(await bgImageFile.arrayBuffer());
+        metaIn.bgImageUrl = `data:${bgImageFile.type || 'image/jpeg'};base64,${buf.toString('base64')}`;
+      } else {
+        metaIn.bgImageUrl = null;
+      }
+    }
+
     let heroUrl: string | null = metaIn.bgImageUrl;
     let heroStoragePath: string | undefined;
     let bgImageCloudSkipped = false;
