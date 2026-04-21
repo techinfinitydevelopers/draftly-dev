@@ -192,14 +192,17 @@ async function saveProjectToFirebaseViaApi(
   });
 
   if (!res.ok) {
-    let detail = '';
+    let detail = `Save failed (${res.status})`;
     try {
-      const j = (await res.json()) as { error?: string };
-      detail = j.error || '';
-    } catch {
-      detail = await res.text();
-    }
-    throw new Error(detail || `Save failed (${res.status})`);
+      const text = await res.text();
+      try {
+        const j = JSON.parse(text) as { error?: string };
+        detail = j.error || text || detail;
+      } catch {
+        detail = text || detail;
+      }
+    } catch { /* ignore */ }
+    throw new Error(detail);
   }
 
   return (await res.json()) as Firebase3DProjectMeta;
