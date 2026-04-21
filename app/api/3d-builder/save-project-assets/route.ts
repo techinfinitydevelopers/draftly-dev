@@ -257,11 +257,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    let framesBuf: Buffer | null = null;
     const framesFile = form.get('frames');
     if (framesFile instanceof File && framesFile.size > 0) {
       const path = projectPath(uid, projectId, 'frames.zip');
-      const buf = Buffer.from(await framesFile.arrayBuffer());
-      if (await tryBucketSave(bucket, path, buf, 'application/zip', 'Frames archive', cloudStorageWarnings)) {
+      framesBuf = Buffer.from(await framesFile.arrayBuffer());
+      if (await tryBucketSave(bucket, path, framesBuf, 'application/zip', 'Frames archive', cloudStorageWarnings)) {
         meta.framesPath = path;
       }
     }
@@ -357,6 +358,39 @@ export async function POST(req: NextRequest) {
         }
 
         await Promise.all(extraUploads);
+
+        // Extract frames from zip and upload each one individually to Wasabi
+        // so the published site.html can load frames-jpg/frame_NNNNNN.jpg via relative paths
+        if (framesBuf && framesBuf.length > 0) {
+          try {
+            const { default: JSZip } = await import('jszip');
+            const zip = await JSZip.loadAsync(framesBuf);
+            const frameEntries = Object.keys(zip.files)
+              .filter(name => !zip.files[name]?.dir)
+              .sort();
+            for (let i = 0; i < frameEntries.length; i += 20) {
+              const batch = frameEntries.slice(i, i + 20);
+              await Promise.all(batch.map(async (entryName, batchIdx) => {
+                const entry = zip.files[entryName];
+                if (!entry || entry.dir) return;
+                const buf = Buffer.from(await entry.async('arraybuffer'));
+                const frameNum = String(i + batchIdx + 1).padStart(6, '0');
+                try {
+                  await uploadToWasabi(
+                    wasabiProjectPath(uid, projectId, `frames-jpg/frame_${frameNum}.jpg`),
+                    buf,
+                    'image/jpeg',
+                  );
+                } catch (e) {
+                  console.warn(`[wasabi] frame_${frameNum} upload failed:`, e);
+                }
+              }));
+            }
+          } catch (e) {
+            console.warn('[wasabi] frames extraction/upload failed:', e);
+          }
+        }
+
         meta.wasabiPath = `users/${uid}/projects/${projectId}/`;
       }
     }
