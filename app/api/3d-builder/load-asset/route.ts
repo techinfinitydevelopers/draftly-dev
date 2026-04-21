@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Try Firebase Storage first, fall back to Wasabi
-    let buffer: Uint8Array<ArrayBufferLike> | null = null;
+    let buf: Buffer | null = null;
     let contentType = 'application/octet-stream';
 
     try {
@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
       const file = bucket.file(storagePath);
       const [exists] = await file.exists();
       if (exists) {
-        const [bufferRaw] = await file.download();
-        buffer = new Uint8Array(bufferRaw.buffer, bufferRaw.byteOffset, bufferRaw.byteLength);
+        const [downloaded] = await file.download();
+        buf = downloaded;
         const [metadata] = await file.getMetadata();
         contentType = (metadata.contentType as string) || contentType;
       }
@@ -57,12 +57,11 @@ export async function GET(req: NextRequest) {
       // Firebase Storage unavailable — will try Wasabi below
     }
 
-    if (!buffer && isWasabiConfigured()) {
+    if (!buf && isWasabiConfigured()) {
       try {
         // Wasabi uses a different path pattern: users/{uid}/projects/{projectId}/...
         const wasabiKey = storagePath.replace(/^users\/([^/]+)\/3d-projects\//, 'users/$1/projects/');
-        const wasabiBuf = await downloadFromWasabi(wasabiKey);
-        buffer = new Uint8Array(wasabiBuf.buffer, wasabiBuf.byteOffset, wasabiBuf.byteLength);
+        buf = await downloadFromWasabi(wasabiKey);
         if (storagePath.endsWith('.html')) contentType = 'text/html; charset=utf-8';
         else if (storagePath.endsWith('.mp4')) contentType = 'video/mp4';
       } catch {
@@ -70,11 +69,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (!buffer) {
+    if (!buf) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    return new NextResponse(new Blob([buffer], { type: contentType }), {
+    return new NextResponse(buf, {
       status: 200,
       headers: {
         'Content-Type': contentType,
