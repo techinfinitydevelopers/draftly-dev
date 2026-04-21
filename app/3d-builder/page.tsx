@@ -1095,6 +1095,7 @@ function ThreeDBuilderInner() {
       })
       .catch((e) => {
         logger.warn('Cloud save failed:', e);
+        throw e;
       });
   }, [activeProjectId, user?.uid, sitePrompt, bgPrompt, bgImageUrl, siteCode, siteRenderMode, buildTarget, messages, uploadedImages, webpFrames, videoBase64, videoChain, generatedImageUrls]);
 
@@ -2413,7 +2414,12 @@ npm run dev
     try {
       // Always save to cloud first so Firestore has wasabiPath before publish check
       push('system', '[ Publish ] Saving project...');
-      await saveProjectCloudOnly();
+      try {
+        await saveProjectCloudOnly();
+      } catch (saveErr) {
+        push('system', `[ Publish ] Save failed: ${saveErr instanceof Error ? saveErr.message : String(saveErr)}`);
+        return;
+      }
       const idToken = await user.getIdToken();
       const res = await fetch('/api/hosting/publish', {
         method: 'POST',
