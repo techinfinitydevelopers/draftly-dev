@@ -73,7 +73,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    return new NextResponse(buf, {
+    // Copy into a fresh ArrayBuffer — Buffer<ArrayBufferLike> is not assignable to BodyInit directly
+    const ab = new ArrayBuffer(buf.length);
+    new Uint8Array(ab).set(buf);
+
+    return new NextResponse(ab, {
       status: 200,
       headers: {
         'Content-Type': contentType,
