@@ -104,7 +104,7 @@ async function saveProjectToFirebaseViaApi(
   // Pass a sentinel in meta so the server knows to read from the 'bgImage' form field instead.
   let bgImageUrlForMeta: string | null = payload.bgImageUrl;
   if (payload.bgImageUrl?.startsWith('data:image/')) {
-    const m = payload.bgImageUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/s);
+    const m = payload.bgImageUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
     if (m) {
       const binary = atob(m[2]!);
       const bytes = new Uint8Array(binary.length);
