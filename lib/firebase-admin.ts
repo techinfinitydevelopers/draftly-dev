@@ -76,7 +76,15 @@ export function getAdminApp(): App {
     type: "service_account",
     project_id: process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
     private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID || "",
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n') || "",
+    private_key: (() => {
+      let key = process.env.FIREBASE_PRIVATE_KEY || '';
+      // Strip surrounding quotes if accidentally included
+      if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+        key = key.slice(1, -1);
+      }
+      // Handle both literal \n and actual newlines
+      return key.replace(/\\n/g, '\n');
+    })(),
     client_email: process.env.FIREBASE_CLIENT_EMAIL || "",
     client_id: process.env.FIREBASE_CLIENT_ID || "",
     auth_uri: "https://accounts.google.com/o/oauth2/auth",
