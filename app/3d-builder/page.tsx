@@ -1036,14 +1036,14 @@ function ThreeDBuilderInner() {
     safeSessionStorageSetItem(LAST_ACTIVE_PROJECT_KEY, id);
   }, [activeProjectId, projects, sitePrompt, bgPrompt, bgImageUrl, siteCode, siteRenderMode, buildTarget, messages, uploadedImages, webpFrames, videoBase64, videoChain, generatedImageUrls, saveProjects]);
 
-  const saveProjectCloudOnly = useCallback(() => {
-    if (is3DCloudSaveDisabled()) return;
-    if (!user?.uid) return;
+  const saveProjectCloudOnly = useCallback((): Promise<void> => {
+    if (is3DCloudSaveDisabled()) return Promise.resolve();
+    if (!user?.uid) return Promise.resolve();
     const hasRealMessages = messages.some(m => m.role !== 'system');
-    if (!(siteCode || sitePrompt || bgPrompt || hasRealMessages || webpFrames.length || videoBase64)) return;
+    if (!(siteCode || sitePrompt || bgPrompt || hasRealMessages || webpFrames.length || videoBase64)) return Promise.resolve();
     const id = lastPersistedProjectIdRef.current || activeProjectId || `proj_${Date.now()}`;
     const name = sitePrompt?.trim()?.slice(0, 48) || 'Untitled 3D Project';
-    saveProjectToFirebase(user.uid, id, {
+    return saveProjectToFirebase(user.uid, id, {
       name,
       sitePrompt,
       bgPrompt,
@@ -2411,6 +2411,9 @@ npm run dev
     if (!user || !activeProjectId) return;
     setPublishLoading(true);
     try {
+      // Always save to cloud first so Firestore has wasabiPath before publish check
+      push('system', '[ Publish ] Saving project...');
+      await saveProjectCloudOnly();
       const idToken = await user.getIdToken();
       const res = await fetch('/api/hosting/publish', {
         method: 'POST',
@@ -2432,7 +2435,7 @@ npm run dev
     } finally {
       setPublishLoading(false);
     }
-  }, [user, activeProjectId, push]);
+  }, [user, activeProjectId, push, saveProjectCloudOnly]);
 
   // ─── Connect Custom Domain — Step 1: save as pending, show DNS instructions ──
   const connectDomain = useCallback(async () => {
