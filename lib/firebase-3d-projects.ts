@@ -115,6 +115,16 @@ async function saveProjectToFirebaseViaApi(
     }
   }
 
+  // Filter generatedImageUrls — strip data URLs (too large for meta JSON)
+  const safeImageUrls = (payload.generatedImageUrls || [])
+    .filter((u): u is string => typeof u === 'string' && u.startsWith('http'));
+
+  // Strip overly long message texts (e.g. site HTML accidentally stored as message)
+  const safeMessages = (payload.messages || []).map((m) => ({
+    ...m,
+    text: typeof m.text === 'string' && m.text.length > 4000 ? m.text.slice(0, 4000) + '…' : m.text,
+  }));
+
   fd.append(
     'meta',
     JSON.stringify({
@@ -124,8 +134,8 @@ async function saveProjectToFirebaseViaApi(
       bgImageUrl: bgImageUrlForMeta,
       renderMode: payload.renderMode,
       buildTarget: payload.buildTarget,
-      generatedImageUrls: payload.generatedImageUrls,
-      messages: payload.messages,
+      generatedImageUrls: safeImageUrls,
+      messages: safeMessages,
     }),
   );
 
