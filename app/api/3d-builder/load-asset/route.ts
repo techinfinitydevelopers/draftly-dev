@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth, getAdminStorage } from '@/lib/firebase-admin';
 import { resolveFirebaseStorageBucketName } from '@/lib/firebase-storage-bucket';
+import { downloadFromWasabi, isWasabiConfigured } from '@/lib/wasabi-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,20 +37,41 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const storage = getAdminStorage();
-    const bucketName = resolveFirebaseStorageBucketName();
-    const bucket = bucketName ? storage.bucket(bucketName) : storage.bucket();
-    const file = bucket.file(storagePath);
+    // Try Firebase Storage first, fall back to Wasabi
+    let buffer: Uint8Array | Buffer | null = null;
+    let contentType = 'application/octet-stream';
 
-    const [exists] = await file.exists();
-    if (!exists) {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    try {
+      const storage = getAdminStorage();
+      const bucketName = resolveFirebaseStorageBucketName();
+      const bucket = bucketName ? storage.bucket(bucketName) : storage.bucket();
+      const file = bucket.file(storagePath);
+      const [exists] = await file.exists();
+      if (exists) {
+        const [bufferRaw] = await file.download();
+        buffer = new Uint8Array(bufferRaw);
+        const [metadata] = await file.getMetadata();
+        contentType = (metadata.contentType as string) || contentType;
+      }
+    } catch {
+      // Firebase Storage unavailable — will try Wasabi below
     }
 
-    const [bufferRaw] = await file.download();
-    const buffer = new Uint8Array(bufferRaw);
-    const [metadata] = await file.getMetadata();
-    const contentType = (metadata.contentType as string) || 'application/octet-stream';
+    if (!buffer && isWasabiConfigured()) {
+      try {
+        // Wasabi uses a different path pattern: users/{uid}/projects/{projectId}/...
+        const wasabiKey = storagePath.replace(/^users\/([^/]+)\/3d-projects\//, 'users/$1/projects/');
+        buffer = await downloadFromWasabi(wasabiKey);
+        if (storagePath.endsWith('.html')) contentType = 'text/html; charset=utf-8';
+        else if (storagePath.endsWith('.mp4')) contentType = 'video/mp4';
+      } catch {
+        // not found in Wasabi either
+      }
+    }
+
+    if (!buffer) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
 
     return new NextResponse(buffer, {
       status: 200,

@@ -94,6 +94,8 @@ interface SavedProject {
   videoPath?: string;
   videoChainPaths?: string[];
   uploadedImagesPaths?: { id: string; name: string; path: string }[];
+  /** When set, project assets are in Wasabi; load on demand */
+  wasabiPath?: string;
 }
 
 interface UploadedImage {
@@ -1108,7 +1110,7 @@ function ThreeDBuilderInner() {
     if (isGenerating) return;
     safeSessionStorageSetItem(LAST_ACTIVE_PROJECT_KEY, p.id);
     const isFirebaseProject =
-      !!(p.siteCodePath || p.framesPath || p.videoPath || (p.videoChainPaths && p.videoChainPaths.length)) &&
+      !!(p.siteCodePath || p.framesPath || p.videoPath || (p.videoChainPaths && p.videoChainPaths.length) || p.wasabiPath) &&
       user?.uid;
 
     if (isFirebaseProject) {

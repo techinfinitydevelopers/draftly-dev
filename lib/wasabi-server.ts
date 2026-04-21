@@ -3,7 +3,7 @@
  * Uses @aws-sdk/client-s3 with Wasabi endpoint.
  */
 
-import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadBucketCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 
 function getWasabiClient(): S3Client {
   const endpoint = process.env.WASABI_ENDPOINT_URL;
@@ -59,6 +59,20 @@ export async function uploadToWasabi(
 
 export function wasabiProjectPath(uid: string, projectId: string, filename: string): string {
   return `users/${uid}/projects/${projectId}/${filename}`;
+}
+
+/**
+ * Download a file from Wasabi as a Buffer.
+ */
+export async function downloadFromWasabi(key: string): Promise<Buffer> {
+  const res = await client().send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
+  const stream = res.Body as NodeJS.ReadableStream;
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
 }
 
 export function isWasabiConfigured(): boolean {
