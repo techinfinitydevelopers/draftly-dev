@@ -170,6 +170,7 @@ export async function POST(req: NextRequest) {
       buildTarget: string;
       generatedImageUrls?: string[];
       messages?: unknown[];
+      siteCodePath?: string;
     };
     try {
       metaIn = JSON.parse(metaRaw);
@@ -258,9 +259,12 @@ export async function POST(req: NextRequest) {
       meta.generatedImageUrls = metaIn.generatedImageUrls.filter((u) => typeof u === 'string' && u.startsWith('http'));
     }
 
+    // siteCodePath may already be set by the client (uploaded via /api/3d-builder/upload-site)
+    if (metaIn.siteCodePath) {
+      meta.siteCodePath = metaIn.siteCodePath;
+    }
+
     const siteFile = form.get('site');
-    // Read buffer ONCE — reused for both Firebase Storage and Wasabi to avoid
-    // consuming the stream twice (second arrayBuffer() call returns empty).
     let siteBuf: Buffer | null = null;
     if (siteFile instanceof File && siteFile.size > 0) {
       siteBuf = Buffer.from(await siteFile.arrayBuffer());
@@ -335,22 +339,25 @@ export async function POST(req: NextRequest) {
     if (uploadedPaths.length > 0) meta.uploadedImagesPaths = uploadedPaths;
 
     // --- Wasabi upload ---
-    // Reuses already-read buffers (siteBuf, videoBuf) — no double arrayBuffer() reads.
-    // wasabiPath is ONLY set if site.html upload actually succeeds.
+    // site.html is already uploaded by the client via /api/3d-builder/upload-site.
+    // Only handle video + chain here.
     if (isWasabiConfigured()) {
-      let wasabiSiteUploaded = false;
-
-      if (siteBuf && siteBuf.length > 0) {
-        try {
-          await uploadToWasabi(wasabiProjectPath(uid, projectId, 'site.html'), siteBuf, 'text/html; charset=utf-8');
-          wasabiSiteUploaded = true;
-        } catch (e) {
-          console.error('[wasabi] site.html upload failed:', e);
-          cloudStorageWarnings.push(`Wasabi upload failed: ${e instanceof Error ? e.message : String(e)}`);
+      // Consider site uploaded if client pre-uploaded it (siteCodePath set via meta)
+      const wasabiSiteUploaded = !!metaIn.siteCodePath || (() => {
+        // Fallback: if site.html was sent here directly, upload it
+        if (siteBuf && siteBuf.length > 0) {
+          uploadToWasabi(wasabiProjectPath(uid, projectId, 'site.html'), siteBuf, 'text/html; charset=utf-8')
+            .catch((e) => console.warn('[wasabi] site.html fallback upload failed:', e));
+          return true;
         }
-      }
+        return false;
+      })();
 
       if (wasabiSiteUploaded) {
+        meta.wasabiPath = `users/${uid}/projects/${projectId}/`;
+        if (!meta.siteCodePath) {
+          meta.siteCodePath = projectPath(uid, projectId, 'site.html');
+        }
         const extraUploads: Promise<void>[] = [];
 
         if (videoBuf && videoBuf.length > 0) {
@@ -371,15 +378,7 @@ export async function POST(req: NextRequest) {
         }
 
         await Promise.all(extraUploads);
-
-        // Note: frames are uploaded separately via /api/3d-builder/upload-frames
-        // (not sent to this endpoint, to stay within Vercel's 4.5MB payload limit).
-
-        meta.wasabiPath = `users/${uid}/projects/${projectId}/`;
-        // Also set siteCodePath so loadProjectFromFirebase can load via load-asset Wasabi fallback
-        if (!meta.siteCodePath) {
-          meta.siteCodePath = projectPath(uid, projectId, 'site.html');
-        }
+        // Note: frames uploaded separately via /api/3d-builder/upload-frames
       }
     }
     // --- End Wasabi upload ---

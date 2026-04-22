@@ -120,6 +120,33 @@ async function saveProjectToFirebaseViaApi(
     videoFallbackSrc: typeof m.videoFallbackSrc === 'string' && m.videoFallbackSrc.startsWith('data:') ? undefined : m.videoFallbackSrc,
   }));
 
+  // Upload siteCode directly to Wasabi BEFORE calling save-project-assets.
+  // This keeps the save-project-assets payload to only ~5KB (meta JSON),
+  // completely avoiding Vercel's 4.5MB body limit.
+  let siteCodePath: string | undefined;
+  if (payload.siteCode) {
+    try {
+      // Strip large embedded base64 blobs (inline images/fonts) before upload
+      const safeSiteCode = payload.siteCode.replace(/data:[^;]+;base64,[A-Za-z0-9+/=]{500,}/g, '');
+      const siteFd = new FormData();
+      siteFd.append('projectId', projectId);
+      siteFd.append('site', new Blob([safeSiteCode], { type: 'text/html;charset=utf-8' }), 'site.html');
+      const siteRes = await fetch('/api/3d-builder/upload-site', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: siteFd,
+      });
+      if (siteRes.ok) {
+        const siteJson = await siteRes.json() as { siteCodePath?: string };
+        siteCodePath = siteJson.siteCodePath;
+      } else {
+        console.warn('[firebase-3d-projects] upload-site failed:', siteRes.status);
+      }
+    } catch (e) {
+      console.warn('[firebase-3d-projects] upload-site error:', e);
+    }
+  }
+
   fd.append(
     'meta',
     JSON.stringify({
@@ -131,21 +158,9 @@ async function saveProjectToFirebaseViaApi(
       buildTarget: payload.buildTarget,
       generatedImageUrls: safeImageUrls,
       messages: safeMessages,
+      siteCodePath,
     }),
   );
-
-  if (payload.siteCode) {
-    // Strip ALL large base64 blobs the AI may have embedded (images, fonts, etc.)
-    const safeSiteCode = payload.siteCode.replace(/data:[^;]+;base64,[A-Za-z0-9+/=]{500,}/g, '');
-    const metaStr = JSON.stringify({ name: payload.name, sitePrompt: payload.sitePrompt });
-    console.log(
-      '[save] sizes (KB): meta=', Math.round(new Blob([metaStr]).size / 1024),
-      'siteCode=', Math.round(new Blob([safeSiteCode]).size / 1024),
-      'siteCodeOrig=', Math.round(new Blob([payload.siteCode]).size / 1024),
-      'uploadedImages=', payload.uploadedImages.length,
-    );
-    fd.append('site', new Blob([safeSiteCode], { type: 'text/html;charset=utf-8' }), 'site.html');
-  }
 
   // Frames are uploaded separately via /api/3d-builder/upload-frames in batches
   // to avoid the Vercel 4.5MB payload limit (200 frames × ~30-50KB = 6-10MB).
