@@ -4064,7 +4064,7 @@ npm run dev
                             {[
                               { label: 'Type', value: 'A' },
                               { label: 'Name', value: '@' },
-                              { label: 'Value', value: '142.93.218.64' },
+                              { label: 'Value', value: '167.71.239.126' },
                               { label: 'TTL', value: 'Auto' },
                             ].map((row) => (
                               <div key={row.label} className="rounded-lg bg-black/40 px-3 py-2">
@@ -4073,7 +4073,13 @@ npm run dev
                               </div>
                             ))}
                           </div>
-                          <p className="mt-3 text-[11px] text-white/35">
+                          <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+                            <i className="fa-brands fa-cloudflare text-amber-400 text-sm mt-0.5" aria-hidden />
+                            <p className="text-[11px] text-amber-200/80">
+                              <span className="font-semibold text-amber-300">Using Cloudflare?</span> Set the proxy to <span className="font-semibold text-white">OFF</span> (grey cloud icon) for this record — orange cloud will block SSL.
+                            </p>
+                          </div>
+                          <p className="mt-2 text-[11px] text-white/35">
                             DNS usually propagates in minutes. We&apos;re checking automatically every 30 seconds.
                           </p>
                         </div>
