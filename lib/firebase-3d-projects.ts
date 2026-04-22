@@ -206,6 +206,15 @@ async function saveProjectToFirebaseViaApi(
     fd.append(`uploadName_${img.id}`, img.name);
   }
 
+  // Debug: log each FormData field size to identify 413 culprit
+  let totalKb = 0;
+  for (const [key, val] of Array.from(fd.entries())) {
+    const kb = Math.round((val instanceof Blob ? val.size : new Blob([String(val)]).size) / 1024);
+    totalKb += kb;
+    console.log(`[save-fd] ${key}: ${kb} KB`);
+  }
+  console.log(`[save-fd] TOTAL: ${totalKb} KB`);
+
   const res = await fetch('/api/3d-builder/save-project-assets', {
     method: 'POST',
     headers: { Authorization: `Bearer ${idToken}` },
