@@ -145,9 +145,11 @@ export async function POST(req: NextRequest) {
       );
     }
     let uid: string;
+    let tokenEmail: string = '';
     try {
       const decoded = await adminAuth.verifyIdToken(idToken);
       uid = decoded.uid;
+      tokenEmail = decoded.email || '';
     } catch {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
     }
@@ -388,7 +390,10 @@ export async function POST(req: NextRequest) {
     try {
       const userSnap = await db.collection('users').doc(uid).get();
       const userData = userSnap.exists ? userSnap.data() : null;
-      const email = typeof userData?.email === 'string' ? userData.email : '';
+      // Use token email first (always reliable); fall back to Firestore email field.
+      // This prevents accidental project deletion when Firestore user doc has no email field.
+      const firestoreEmail = typeof userData?.email === 'string' ? userData.email : '';
+      const email = tokenEmail || firestoreEmail;
       const plan = String((userData?.subscription as { plan?: string } | undefined)?.plan || 'free');
       const limit = planCloudProjectLimit(plan);
       if (!isOwnerEmail(email)) {
