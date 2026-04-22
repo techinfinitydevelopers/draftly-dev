@@ -1,7 +1,7 @@
 /**
  * GET /api/hosting/verify-domain?domain=myportfolio.com&projectId=xxx
  *
- * Checks if domain's A record points to our VPS (142.93.218.64).
+ * Checks if domain's A record points to our VPS (167.71.239.126).
  * On success → updates Firestore:
  *   domains/{domain}: { status: 'verified', verifiedAt }
  *   projects/{projectId}: { customDomain: domain }
@@ -14,7 +14,7 @@ import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const VPS_IP = '142.93.218.64';
+const VPS_IP = '167.71.239.126';
 
 export async function GET(req: NextRequest) {
   try {

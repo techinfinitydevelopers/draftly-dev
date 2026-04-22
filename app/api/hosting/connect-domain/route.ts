@@ -18,7 +18,7 @@ import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const VPS_IP = '142.93.218.64';
+const VPS_IP = '167.71.239.126';
 
 function isValidDomain(domain: string): boolean {
   return /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(domain.toLowerCase());
