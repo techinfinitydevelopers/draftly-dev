@@ -111,10 +111,13 @@ async function saveProjectToFirebaseViaApi(
   const safeImageUrls = (payload.generatedImageUrls || [])
     .filter((u): u is string => typeof u === 'string' && u.startsWith('http'));
 
-  // Strip overly long message texts (e.g. site HTML accidentally stored as message)
+  // Strip overly long message texts and base64 data URLs from image/video fields
   const safeMessages = (payload.messages || []).map((m) => ({
     ...m,
     text: typeof m.text === 'string' && m.text.length > 4000 ? m.text.slice(0, 4000) + '…' : m.text,
+    imageUrl: typeof m.imageUrl === 'string' && m.imageUrl.startsWith('data:') ? undefined : m.imageUrl,
+    videoSrc: typeof m.videoSrc === 'string' && m.videoSrc.startsWith('data:') ? undefined : m.videoSrc,
+    videoFallbackSrc: typeof m.videoFallbackSrc === 'string' && m.videoFallbackSrc.startsWith('data:') ? undefined : m.videoFallbackSrc,
   }));
 
   fd.append(
@@ -132,7 +135,10 @@ async function saveProjectToFirebaseViaApi(
   );
 
   if (payload.siteCode) {
-    fd.append('site', new Blob([payload.siteCode], { type: 'text/html;charset=utf-8' }), 'site.html');
+    // Strip any base64 data URLs the AI may have embedded in the HTML (e.g. inline bg images)
+    // to keep the payload small. Saved version uses file paths, not embedded blobs.
+    const safeSiteCode = payload.siteCode.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]{1000,}/g, '');
+    fd.append('site', new Blob([safeSiteCode], { type: 'text/html;charset=utf-8' }), 'site.html');
   }
 
   // Frames are uploaded separately via /api/3d-builder/upload-frames in batches
