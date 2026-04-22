@@ -94,6 +94,13 @@ export async function GET(req: NextRequest) {
       { merge: true },
     );
 
+    // Also save customDomain in user's 3dProjects subcollection so UI can read it
+    batch.set(
+      db.collection('users').doc(uid).collection('3dProjects').doc(domainData.projectId || projectId),
+      { customDomain: domain },
+      { merge: true },
+    );
+
     // Mark user hosting as active so VPS serves the custom domain
     batch.set(
       db.collection('users').doc(uid),

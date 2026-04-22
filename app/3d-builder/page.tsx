@@ -96,6 +96,8 @@ interface SavedProject {
   uploadedImagesPaths?: { id: string; name: string; path: string }[];
   /** When set, project assets are in Wasabi; load on demand */
   wasabiPath?: string;
+  /** Custom domain connected to this project (set after domain verification) */
+  customDomain?: string | null;
 }
 
 interface UploadedImage {
@@ -1149,6 +1151,14 @@ function ThreeDBuilderInner() {
         setActiveProjectId(p.id);
         lastPersistedProjectIdRef.current = p.id;
         setBuildModeChosen('frontend');
+        // Restore custom domain state if connected
+        if (p.customDomain) {
+          setConnectedDomain(p.customDomain);
+          setDomainStep('done');
+        } else {
+          setConnectedDomain(null);
+          setDomainStep('idle');
+        }
         setMessages(prev => [...prev, { role: 'system', text: `[PROJECT] Loaded from cloud: ${p.name}`, ts: Date.now() }]);
 
         // Frames are not saved to cloud (too large). Regenerate from video on load.
@@ -1173,6 +1183,14 @@ function ThreeDBuilderInner() {
 
     setActiveProjectId(p.id);
     lastPersistedProjectIdRef.current = p.id;
+    // Restore custom domain state if connected
+    if (p.customDomain) {
+      setConnectedDomain(p.customDomain);
+      setDomainStep('done');
+    } else {
+      setConnectedDomain(null);
+      setDomainStep('idle');
+    }
     setSitePrompt(p.sitePrompt);
     setBgPrompt(p.bgPrompt);
     setBgImageUrl(p.bgImageUrl);
