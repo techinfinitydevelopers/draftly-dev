@@ -135,9 +135,15 @@ async function saveProjectToFirebaseViaApi(
   );
 
   if (payload.siteCode) {
-    // Strip any base64 data URLs the AI may have embedded in the HTML (e.g. inline bg images)
-    // to keep the payload small. Saved version uses file paths, not embedded blobs.
-    const safeSiteCode = payload.siteCode.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]{1000,}/g, '');
+    // Strip ALL large base64 blobs the AI may have embedded (images, fonts, etc.)
+    const safeSiteCode = payload.siteCode.replace(/data:[^;]+;base64,[A-Za-z0-9+/=]{500,}/g, '');
+    const metaStr = JSON.stringify({ name: payload.name, sitePrompt: payload.sitePrompt });
+    console.log(
+      '[save] sizes (KB): meta=', Math.round(new Blob([metaStr]).size / 1024),
+      'siteCode=', Math.round(new Blob([safeSiteCode]).size / 1024),
+      'siteCodeOrig=', Math.round(new Blob([payload.siteCode]).size / 1024),
+      'uploadedImages=', payload.uploadedImages.length,
+    );
     fd.append('site', new Blob([safeSiteCode], { type: 'text/html;charset=utf-8' }), 'site.html');
   }
 
