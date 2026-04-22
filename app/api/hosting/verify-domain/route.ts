@@ -94,6 +94,13 @@ export async function GET(req: NextRequest) {
       { merge: true },
     );
 
+    // Mark user hosting as active so VPS serves the custom domain
+    batch.set(
+      db.collection('users').doc(uid),
+      { hostingStatus: 'active' },
+      { merge: true },
+    );
+
     await batch.commit();
 
     return NextResponse.json({
