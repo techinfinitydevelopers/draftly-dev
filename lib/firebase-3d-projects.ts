@@ -100,11 +100,36 @@ async function saveProjectToFirebaseViaApi(
   const fd = new FormData();
   fd.append('projectId', projectId);
 
-  // If bgImageUrl is a data URL, skip it from the save request entirely to avoid Vercel 4.5MB payload limit.
-  // The bgImage is optional (used for thumbnails); siteCode + wasabiPath are what matter for publishing.
+  // Upload bgImage to Wasabi separately (avoids 413). Store path so load-asset proxy can serve it.
   let bgImageUrlForMeta: string | null = payload.bgImageUrl;
+  let bgImagePathForMeta: string | undefined;
   if (payload.bgImageUrl?.startsWith('data:image/')) {
-    bgImageUrlForMeta = null;
+    try {
+      const match = payload.bgImageUrl.match(/^data:image\/([\w+.-]+);base64,(.+)$/i);
+      if (match) {
+        const ext = match[1]!.includes('png') ? 'png' : match[1]!.includes('webp') ? 'webp' : 'jpg';
+        const binary = atob(match[2]!);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const bgFd = new FormData();
+        bgFd.append('projectId', projectId);
+        bgFd.append('ext', ext);
+        bgFd.append('bg', new Blob([bytes], { type: `image/${ext}` }), `bg-hero.${ext}`);
+        const bgRes = await fetch('/api/3d-builder/upload-bgimage', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${idToken}` },
+          body: bgFd,
+        });
+        if (bgRes.ok) {
+          const bgJson = await bgRes.json() as { bgImagePath?: string };
+          bgImagePathForMeta = bgJson.bgImagePath;
+          bgImageUrlForMeta = null; // path stored separately, no data URL in Firestore
+        }
+      }
+    } catch (e) {
+      console.warn('[firebase-3d-projects] bgImage upload failed:', e);
+      bgImageUrlForMeta = null; // still strip data URL to avoid 413
+    }
   }
 
   // Filter generatedImageUrls — strip data URLs (too large for meta JSON)
@@ -154,6 +179,7 @@ async function saveProjectToFirebaseViaApi(
       sitePrompt: payload.sitePrompt,
       bgPrompt: payload.bgPrompt,
       bgImageUrl: bgImageUrlForMeta,
+      bgImagePath: bgImagePathForMeta,
       renderMode: payload.renderMode,
       buildTarget: payload.buildTarget,
       generatedImageUrls: safeImageUrls,
@@ -347,12 +373,9 @@ export async function loadProjectFromFirebase(
   }
   const metaRaw = snap.data() as Firebase3DProjectMeta;
   let resolvedBgUrl = metaRaw.bgImageUrl ?? null;
+  // bgImagePath is set when bgImage was uploaded to Wasabi — serve via load-asset proxy
   if (!resolvedBgUrl && metaRaw.bgImagePath) {
-    try {
-      resolvedBgUrl = await getDownloadURL(ref(storage, metaRaw.bgImagePath));
-    } catch {
-      /* keep null */
-    }
+    resolvedBgUrl = `/api/3d-builder/load-asset?path=${encodeURIComponent(metaRaw.bgImagePath)}`;
   }
   const meta: Firebase3DProjectMeta = { ...metaRaw, bgImageUrl: resolvedBgUrl };
 

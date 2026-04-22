@@ -166,6 +166,7 @@ export async function POST(req: NextRequest) {
       sitePrompt: string;
       bgPrompt: string;
       bgImageUrl: string | null;
+      bgImagePath?: string;
       renderMode: 'frame-scroll' | 'video-hero';
       buildTarget: string;
       generatedImageUrls?: string[];
@@ -249,10 +250,13 @@ export async function POST(req: NextRequest) {
 
     if (heroStoragePath) {
       meta.bgImagePath = heroStoragePath;
+    } else if (metaIn.bgImagePath) {
+      // bgImage was uploaded by client via /api/3d-builder/upload-bgimage
+      meta.bgImagePath = metaIn.bgImagePath;
     }
     if (bgImageCloudSkipped) {
       meta.bgImageCloudSkipped = true;
-      meta.bgImagePath = FieldValue.delete();
+      if (!metaIn.bgImagePath) meta.bgImagePath = FieldValue.delete();
     }
 
     if (Array.isArray(metaIn.generatedImageUrls)) {
