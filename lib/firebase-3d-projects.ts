@@ -100,19 +100,11 @@ async function saveProjectToFirebaseViaApi(
   const fd = new FormData();
   fd.append('projectId', projectId);
 
-  // If bgImageUrl is a data URL, send it as a separate blob to avoid 413 (Vercel body size limit).
-  // Pass a sentinel in meta so the server knows to read from the 'bgImage' form field instead.
+  // If bgImageUrl is a data URL, skip it from the save request entirely to avoid Vercel 4.5MB payload limit.
+  // The bgImage is optional (used for thumbnails); siteCode + wasabiPath are what matter for publishing.
   let bgImageUrlForMeta: string | null = payload.bgImageUrl;
   if (payload.bgImageUrl?.startsWith('data:image/')) {
-    const m = payload.bgImageUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
-    if (m) {
-      const binary = atob(m[2]!);
-      const bytes = new Uint8Array(binary.length);
-      for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
-      const ext = m[1]!.includes('png') ? 'png' : m[1]!.includes('webp') ? 'webp' : 'jpg';
-      fd.append('bgImage', new Blob([bytes], { type: m[1] }), `bg.${ext}`);
-      bgImageUrlForMeta = '__bgImage_form_field__';
-    }
+    bgImageUrlForMeta = null;
   }
 
   // Filter generatedImageUrls — strip data URLs (too large for meta JSON)
@@ -143,16 +135,8 @@ async function saveProjectToFirebaseViaApi(
     fd.append('site', new Blob([payload.siteCode], { type: 'text/html;charset=utf-8' }), 'site.html');
   }
 
-  if (payload.webpFrames.length > 0) {
-    const { default: JSZip } = await import('jszip');
-    const zip = new JSZip();
-    payload.webpFrames.forEach((dataUrl, i) => {
-      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-      zip.file(`frame_${String(i + 1).padStart(6, '0')}.webp`, base64!, { base64: true });
-    });
-    const blob = await zip.generateAsync({ type: 'blob' });
-    fd.append('frames', blob, 'frames.zip');
-  }
+  // Frames are uploaded separately via /api/3d-builder/upload-frames in batches
+  // to avoid the Vercel 4.5MB payload limit (200 frames × ~30-50KB = 6-10MB).
 
   if (payload.videoBase64) {
     const match = payload.videoBase64.match(/^data:([^;]+);base64,(.+)$/);
@@ -215,7 +199,41 @@ async function saveProjectToFirebaseViaApi(
     throw new Error(detail);
   }
 
-  return (await res.json()) as Firebase3DProjectMeta;
+  const savedMeta = (await res.json()) as Firebase3DProjectMeta;
+
+  // Upload frames in batches of 20 to avoid Vercel 4.5MB limit.
+  // Fire-and-forget: frame upload failures don't block project save.
+  if (payload.webpFrames.length > 0) {
+    (async () => {
+      try {
+        const BATCH_SIZE = 20;
+        for (let start = 0; start < payload.webpFrames.length; start += BATCH_SIZE) {
+          const batch = payload.webpFrames.slice(start, start + BATCH_SIZE);
+          const framesFd = new FormData();
+          framesFd.append('projectId', projectId);
+          for (let j = 0; j < batch.length; j++) {
+            const dataUrl = batch[j]!;
+            const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+            if (!base64) continue;
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let k = 0; k < binary.length; k++) bytes[k] = binary.charCodeAt(k);
+            const frameNum = String(start + j + 1).padStart(6, '0');
+            framesFd.append(`frame_${frameNum}`, new Blob([bytes], { type: 'image/webp' }), `frame_${frameNum}.webp`);
+          }
+          await fetch('/api/3d-builder/upload-frames', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${idToken}` },
+            body: framesFd,
+          });
+        }
+      } catch (e) {
+        console.warn('[firebase-3d-projects] Frames upload failed (non-blocking):', e);
+      }
+    })();
+  }
+
+  return savedMeta;
 }
 
 /**
