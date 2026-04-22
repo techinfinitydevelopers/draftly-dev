@@ -201,14 +201,17 @@ async function saveProjectToFirebaseViaApi(
 
   const savedMeta = (await res.json()) as Firebase3DProjectMeta;
 
-  // Upload frames in batches of 20 to avoid Vercel 4.5MB limit.
-  // Fire-and-forget: frame upload failures don't block project save.
+  // Upload frames in parallel batches of 20 to avoid Vercel 4.5MB limit.
+  // Awaited so frames are guaranteed in Wasabi before save returns.
   if (payload.webpFrames.length > 0) {
-    (async () => {
-      try {
-        const BATCH_SIZE = 20;
-        for (let start = 0; start < payload.webpFrames.length; start += BATCH_SIZE) {
-          const batch = payload.webpFrames.slice(start, start + BATCH_SIZE);
+    try {
+      const BATCH_SIZE = 20;
+      const batchPromises: Promise<void>[] = [];
+
+      for (let start = 0; start < payload.webpFrames.length; start += BATCH_SIZE) {
+        const batch = payload.webpFrames.slice(start, start + BATCH_SIZE);
+        const batchStart = start;
+        batchPromises.push((async () => {
           const framesFd = new FormData();
           framesFd.append('projectId', projectId);
           for (let j = 0; j < batch.length; j++) {
@@ -218,19 +221,22 @@ async function saveProjectToFirebaseViaApi(
             const binary = atob(base64);
             const bytes = new Uint8Array(binary.length);
             for (let k = 0; k < binary.length; k++) bytes[k] = binary.charCodeAt(k);
-            const frameNum = String(start + j + 1).padStart(6, '0');
+            const frameNum = String(batchStart + j + 1).padStart(6, '0');
             framesFd.append(`frame_${frameNum}`, new Blob([bytes], { type: 'image/webp' }), `frame_${frameNum}.webp`);
           }
-          await fetch('/api/3d-builder/upload-frames', {
+          const r = await fetch('/api/3d-builder/upload-frames', {
             method: 'POST',
             headers: { Authorization: `Bearer ${idToken}` },
             body: framesFd,
           });
-        }
-      } catch (e) {
-        console.warn('[firebase-3d-projects] Frames upload failed (non-blocking):', e);
+          if (!r.ok) console.warn(`[firebase-3d-projects] Frames batch ${batchStart} upload failed:`, r.status);
+        })());
       }
-    })();
+
+      await Promise.all(batchPromises);
+    } catch (e) {
+      console.warn('[firebase-3d-projects] Frames upload failed:', e);
+    }
   }
 
   return savedMeta;
