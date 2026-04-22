@@ -313,6 +313,15 @@ export async function loadProjectFromFirebase(
     if (res.ok) siteCode = await res.text();
   }
 
+  // Fallback: if siteCodePath missing but wasabiPath set, load site.html from Wasabi via load-asset
+  if (!siteCode && (metaRaw as any).wasabiPath) {
+    const wasabiStoragePath = `users/${userId}/3d-projects/${projectId}/site.html`;
+    try {
+      const res = await proxyFetch(wasabiStoragePath);
+      if (res.ok) siteCode = await res.text();
+    } catch { /* ignore */ }
+  }
+
   if (meta.framesPath) {
     const res = await proxyFetch(meta.framesPath);
     if (res.ok) {
