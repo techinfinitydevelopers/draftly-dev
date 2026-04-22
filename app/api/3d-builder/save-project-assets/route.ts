@@ -403,6 +403,10 @@ export async function POST(req: NextRequest) {
         }
 
         meta.wasabiPath = `users/${uid}/projects/${projectId}/`;
+        // Also set siteCodePath so loadProjectFromFirebase can load via load-asset Wasabi fallback
+        if (!meta.siteCodePath) {
+          meta.siteCodePath = projectPath(uid, projectId, 'site.html');
+        }
       }
     }
     // --- End Wasabi upload ---
